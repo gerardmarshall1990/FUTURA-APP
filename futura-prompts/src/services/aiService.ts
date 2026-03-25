@@ -1,0 +1,339 @@
+/**
+ * aiService.ts
+ *
+ * The complete AI service layer for Futura.
+ * All OpenAI calls live here — one import path, one place to tune models,
+ * swap providers, or add streaming without touching business logic.
+ *
+ * Services:
+ * - generateReading()       — full reading pipeline (blocks + polish)
+ * - polishTeaser()          — polish teaser section only
+ * - polishLocked()          — polish locked/deeper section only
+ * - generateIdentitySummary() — AI-generated identity summary (vs template)
+ * - sendAdvisorMessage()    — chat advisor turn
+ * - extractMemoryThemes()   — post-session memory extraction
+ * - generateDailyInsight()  — Phase 2 daily insight generation
+ * - classifyMessageIntent() — high-intent paywall classification
+ */
+
+import OpenAI from 'openai'
+import {
+  READING_SYSTEM_PROMPT,
+  READING_POLISH_SYSTEM_PROMPT,
+  LOCKED_POLISH_SYSTEM_PROMPT,
+  buildReadingUserPrompt,
+  buildPolishUserPrompt,
+  buildLockedPolishUserPrompt,
+  type ReadingPromptInput,
+  type PolishPromptInput,
+} from '@/lib/prompts/readingPrompt'
+
+import {
+  buildAdvisorSystemPrompt,
+  buildAdvisorOpeningMessage,
+  INTENT_CLASSIFICATION_PROMPT,
+  buildIntentClassificationPrompt,
+  type AdvisorSystemPromptInput,
+} from '@/lib/prompts/advisorPrompt'
+
+import {
+  IDENTITY_SUMMARY_SYSTEM_PROMPT,
+  buildIdentitySummaryPrompt,
+  MEMORY_EXTRACTION_SYSTEM_PROMPT,
+  buildMemoryExtractionPrompt,
+  DAILY_INSIGHT_SYSTEM_PROMPT,
+  buildDailyInsightPrompt,
+  type ReadingStyle,
+  buildStyledReadingSystemPrompt,
+} from '@/lib/prompts/polishPrompt'
+
+import type {
+  FocusArea,
+  CurrentState,
+  PersonalityTrait,
+} from '@/services/profileNormalizationService'
+
+// ─── Client ───────────────────────────────────────────────────────────────────
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+})
+
+// ─── Model config ─────────────────────────────────────────────────────────────
+
+const MODELS = {
+  quality: 'gpt-4o',           // Reading generation, polish — quality matters
+  fast: 'gpt-4o-mini',         // Chat turns, intent classification — cost & speed
+} as const
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function complete(
+  systemPrompt: string,
+  userPrompt: string,
+  model: 'quality' | 'fast',
+  maxTokens: number,
+  temperature = 0.72
+): Promise<string> {
+  const response = await openai.chat.completions.create({
+    model: MODELS[model],
+    max_tokens: maxTokens,
+    temperature,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: userPrompt },
+    ],
+  })
+
+  return response.choices[0].message.content?.trim() ?? ''
+}
+
+// ─── Reading Services ─────────────────────────────────────────────────────────
+
+/**
+ * Polish teaser and locked text in parallel.
+ * This is the main pipeline called by readingCompositionService.
+ */
+export async function polishReading(
+  teaserRaw: string,
+  lockedRaw: string,
+  cutLine: string,
+  identitySummary: string,
+  focusArea: FocusArea,
+  futureTheme: string
+): Promise<{ teaserText: string; cutLine: string; lockedText: string }> {
+  const polishInput: PolishPromptInput = {
+    teaserRaw,
+    cutLine,
+    lockedRaw,
+    identitySummary,
+    focusArea,
+  }
+
+  const [teaserText, lockedText] = await Promise.all([
+    complete(
+      READING_POLISH_SYSTEM_PROMPT,
+      buildPolishUserPrompt(polishInput),
+      'quality',
+      600,
+      0.68
+    ),
+    complete(
+      LOCKED_POLISH_SYSTEM_PROMPT,
+      buildLockedPolishUserPrompt(lockedRaw, identitySummary, focusArea, futureTheme),
+      'quality',
+      400,
+      0.7
+    ),
+  ])
+
+  return {
+    teaserText: teaserText || teaserRaw,
+    cutLine,
+    lockedText: lockedText || lockedRaw,
+  }
+}
+
+/**
+ * Full AI reading generation — used when you want the AI to write the entire
+ * reading from the profile rather than using the block system.
+ * Keep this as an alternative path for experimentation (A/B test vs blocks).
+ */
+export async function generateFullReading(
+  input: ReadingPromptInput,
+  style: ReadingStyle = 'clinical'
+): Promise<{ teaserText: string; cutLine: string; lockedText: string }> {
+  const systemPrompt = style === 'clinical'
+    ? READING_SYSTEM_PROMPT
+    : buildStyledReadingSystemPrompt(style)
+
+  const raw = await complete(
+    systemPrompt,
+    buildReadingUserPrompt(input),
+    'quality',
+    800,
+    0.75
+  )
+
+  // Split on double newline — first 4 paras are teaser, rest is locked
+  const paragraphs = raw.split('\n\n').filter(Boolean)
+  const teaserParagraphs = paragraphs.slice(0, 4)
+  const lockedParagraphs = paragraphs.slice(4)
+
+  const cutLine = `How you respond to this moment will shape what unfolds over the next few months...`
+
+  return {
+    teaserText: teaserParagraphs.join('\n\n'),
+    cutLine,
+    lockedText: lockedParagraphs.join('\n\n') || paragraphs[paragraphs.length - 1] ?? '',
+  }
+}
+
+// ─── Identity Services ────────────────────────────────────────────────────────
+
+/**
+ * AI-generated identity summary — more unique than template version.
+ * Use for premium users or when you want higher variation.
+ */
+export async function generateIdentitySummary(
+  personalityTrait: PersonalityTrait,
+  currentState: CurrentState,
+  focusArea: FocusArea,
+  ageBand: string
+): Promise<string> {
+  return complete(
+    IDENTITY_SUMMARY_SYSTEM_PROMPT,
+    buildIdentitySummaryPrompt(personalityTrait, currentState, focusArea, ageBand),
+    'fast',
+    180,
+    0.65
+  )
+}
+
+// ─── Chat Advisor Services ────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Main advisor chat turn.
+ * Injects full identity context into system prompt every time.
+ * History is passed in and managed by caller.
+ */
+export async function sendAdvisorMessage(
+  ctx: AdvisorSystemPromptInput,
+  history: ChatMessage[],
+  newMessage: string
+): Promise<string> {
+  const systemPrompt = buildAdvisorSystemPrompt(ctx)
+
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
+    ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    { role: 'user', content: newMessage },
+  ]
+
+  const response = await openai.chat.completions.create({
+    model: MODELS.fast,
+    max_tokens: 320,
+    temperature: 0.78,
+    messages,
+    // Prevent runaway responses
+    stop: ['\n\n\n'],
+  })
+
+  return response.choices[0].message.content?.trim()
+    ?? 'Something interrupted the connection. Please try again.'
+}
+
+/**
+ * Returns the opening message the advisor sends at the start of a session.
+ * This is deterministic (no API call) but uses the advisor prompt system.
+ */
+export function getAdvisorOpeningMessage(ctx: AdvisorSystemPromptInput): string {
+  return buildAdvisorOpeningMessage(ctx)
+}
+
+// ─── Memory Services ──────────────────────────────────────────────────────────
+
+export interface MemoryTheme {
+  key_theme: string
+  description: string
+}
+
+/**
+ * Extracts behavioral themes from a completed chat session.
+ * Run this after a session ends (e.g. after 5+ messages, or on session close).
+ * Results are stored in user_insights_memory for future personalization.
+ */
+export async function extractMemoryThemes(
+  chatHistory: ChatMessage[],
+  identitySummary: string,
+  existingThemes: string[]
+): Promise<MemoryTheme[]> {
+  if (chatHistory.length < 4) return [] // Not enough signal yet
+
+  const raw = await complete(
+    MEMORY_EXTRACTION_SYSTEM_PROMPT,
+    buildMemoryExtractionPrompt(chatHistory, identitySummary, existingThemes),
+    'fast',
+    300,
+    0.4 // Low temperature for consistent JSON output
+  )
+
+  try {
+    // Strip any markdown fences if present
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (t: unknown) =>
+        t &&
+        typeof t === 'object' &&
+        'key_theme' in (t as object) &&
+        'description' in (t as object)
+    ) as MemoryTheme[]
+  } catch {
+    return []
+  }
+}
+
+// ─── Intent Classification ────────────────────────────────────────────────────
+
+/**
+ * Server-side intent classification — more accurate than regex.
+ * Use this for high-stakes paywall decisions.
+ * Regex version in paywallTriggerService is the fast path.
+ */
+export async function classifyMessageIntent(
+  message: string,
+  focusArea: FocusArea
+): Promise<'high_intent' | 'standard' | 'off_topic'> {
+  const raw = await complete(
+    INTENT_CLASSIFICATION_PROMPT,
+    buildIntentClassificationPrompt(message, focusArea),
+    'fast',
+    10,
+    0.0 // Deterministic
+  )
+
+  const result = raw.trim().toLowerCase()
+  if (result === 'high_intent') return 'high_intent'
+  if (result === 'off_topic') return 'off_topic'
+  return 'standard'
+}
+
+// ─── Daily Insight (Phase 2) ──────────────────────────────────────────────────
+
+/**
+ * Generates a daily insight for a user.
+ * Call this from a cron job or on-demand when user opens the app.
+ * Architecture is in place — wire up the UI in Phase 2.
+ */
+export async function generateDailyInsight(
+  identitySummary: string,
+  futureTheme: string,
+  focusArea: FocusArea,
+  memoryThemes: MemoryTheme[],
+  daysSinceReading: number
+): Promise<string> {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+  const dayOfWeek = days[new Date().getDay()]
+
+  return complete(
+    DAILY_INSIGHT_SYSTEM_PROMPT,
+    buildDailyInsightPrompt(
+      identitySummary,
+      futureTheme,
+      focusArea,
+      memoryThemes,
+      dayOfWeek,
+      daysSinceReading
+    ),
+    'fast',
+    200,
+    0.75
+  )
+}
