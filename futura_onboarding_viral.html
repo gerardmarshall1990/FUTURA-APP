@@ -1,0 +1,328 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#111;font-family:Georgia,serif;display:flex;justify-content:center;padding:20px 10px 40px;}
+
+.layout{display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap;justify-content:center;max-width:900px;width:100%;}
+
+.phone-shell{width:300px;flex-shrink:0;}
+.phone{width:300px;border-radius:38px;background:#080706;border:2px solid #2a2318;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.8);}
+.notch{width:80px;height:22px;background:#080706;border-radius:0 0 14px 14px;margin:0 auto;}
+
+.screen{background:#080706;min-height:560px;padding:0 18px 24px;display:none;flex-direction:column;align-items:center;position:relative;overflow:hidden;}
+.screen.on{display:flex;}
+
+.bg-glow{position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:320px;height:320px;background:radial-gradient(circle,rgba(201,169,110,0.13) 0%,transparent 65%);border-radius:50%;pointer-events:none;}
+
+/* Progress */
+.prog{display:flex;gap:5px;width:100%;padding:14px 0 0;position:relative;z-index:2;}
+.ps{flex:1;height:2px;border-radius:1px;background:rgba(201,169,110,0.13);transition:background 0.3s;}
+.ps.done{background:rgba(201,169,110,0.75);}
+.ps.now{background:rgba(201,169,110,0.4);}
+
+.logo-txt{font-family:Georgia,serif;font-size:10px;font-weight:400;letter-spacing:0.28em;color:rgba(201,169,110,0.45);text-transform:uppercase;margin:10px 0 0;position:relative;z-index:2;}
+
+.step-tag{font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:rgba(201,169,110,0.38);margin:18px 0 6px;position:relative;z-index:2;align-self:flex-start;font-family:Arial,sans-serif;}
+
+.qhead{font-size:27px;font-weight:300;line-height:1.15;color:#F0EBE1;letter-spacing:-0.01em;margin-bottom:6px;position:relative;z-index:2;align-self:flex-start;font-family:Georgia,serif;}
+.qhead em{font-style:italic;color:#C9A96E;}
+
+.qsub{font-size:11.5px;font-weight:400;line-height:1.6;color:rgba(240,235,225,0.35);margin-bottom:20px;position:relative;z-index:2;align-self:flex-start;font-family:Arial,sans-serif;}
+
+/* Name input */
+.name-inp{width:100%;background:rgba(201,169,110,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:12px;padding:15px 16px;font-family:Georgia,serif;font-size:22px;font-weight:300;color:#F0EBE1;outline:none;margin-bottom:12px;position:relative;z-index:2;letter-spacing:0.02em;}
+
+.hint-line{width:100%;font-size:10px;color:rgba(201,169,110,0.3);letter-spacing:0.05em;margin-bottom:20px;position:relative;z-index:2;font-family:Arial,sans-serif;}
+
+/* DOB */
+.dob-row{display:flex;gap:7px;width:100%;position:relative;z-index:2;margin-bottom:10px;}
+.dob-sel{flex:1;background:rgba(201,169,110,0.05);border:1px solid rgba(201,169,110,0.18);border-radius:10px;padding:12px 6px;font-family:Arial,sans-serif;font-size:12px;color:rgba(240,235,225,0.55);outline:none;cursor:pointer;text-align:center;-webkit-appearance:none;}
+
+.sign-box{width:100%;background:rgba(201,169,110,0.07);border:1px solid rgba(201,169,110,0.22);border-radius:10px;padding:11px 14px;display:none;align-items:center;gap:10px;position:relative;z-index:2;margin-bottom:14px;}
+.sign-box.show{display:flex;}
+.s-icon{font-size:22px;}
+.s-name{font-family:Georgia,serif;font-size:16px;color:#C9A96E;}
+.s-note{font-family:Arial,sans-serif;font-size:10px;color:rgba(240,235,225,0.32);margin-top:2px;}
+
+/* Religion */
+.rel-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;width:100%;position:relative;z-index:2;margin-bottom:10px;}
+.ropt{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:11px 10px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:all 0.2s;}
+.ropt:hover,.ropt.picked{background:rgba(201,169,110,0.09);border-color:rgba(201,169,110,0.32);}
+.r-ico{font-size:17px;margin-bottom:2px;}
+.r-name{font-family:Arial,sans-serif;font-size:11px;font-weight:600;color:rgba(240,235,225,0.78);}
+.r-note{font-family:Arial,sans-serif;font-size:9.5px;color:rgba(240,235,225,0.28);line-height:1.4;}
+
+.tone-box{width:100%;background:rgba(201,169,110,0.05);border-left:2px solid rgba(201,169,110,0.55);border-top:1px solid rgba(201,169,110,0.1);border-right:1px solid rgba(201,169,110,0.1);border-bottom:1px solid rgba(201,169,110,0.1);border-radius:0 10px 10px 0;padding:10px 13px;display:none;margin-bottom:12px;position:relative;z-index:2;}
+.tone-box.show{display:block;}
+.tone-tag{font-family:Arial,sans-serif;font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:rgba(201,169,110,0.38);margin-bottom:5px;}
+.tone-txt{font-family:Georgia,serif;font-size:13px;font-style:italic;line-height:1.55;color:rgba(240,235,225,0.55);}
+
+/* Generating */
+.gen-area{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:18px;text-align:center;padding:16px 0;position:relative;z-index:2;width:100%;}
+
+.orb{position:relative;width:150px;height:150px;animation:breathe 4s ease-in-out infinite;flex-shrink:0;}
+@keyframes breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
+.o-r{position:absolute;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);}
+.or1{width:150px;height:150px;border:1px solid rgba(201,169,110,0.08);}
+.or2{width:114px;height:114px;border:1px solid rgba(201,169,110,0.14);}
+.or3{width:78px;height:78px;border:1px solid rgba(201,169,110,0.22);background:radial-gradient(circle,rgba(201,169,110,0.09) 0%,transparent 70%);}
+.o-spin{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:134px;height:134px;border-radius:50%;border:1px solid transparent;border-top-color:rgba(201,169,110,0.65);animation:sp 5s linear infinite;}
+@keyframes sp{from{transform:translate(-50%,-50%) rotate(0deg);}to{transform:translate(-50%,-50%) rotate(360deg);}}
+.o-palm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:26px;opacity:0.18;filter:sepia(1) brightness(2);animation:pp 4s ease-in-out infinite;}
+@keyframes pp{0%,100%{opacity:0.13;}50%{opacity:0.22;}}
+.o-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:6px;height:6px;border-radius:50%;background:rgba(201,169,110,0.95);box-shadow:0 0 12px rgba(201,169,110,0.7);}
+
+.gen-name{font-family:Georgia,serif;font-size:20px;font-style:italic;color:#C9A96E;}
+.gen-status{font-family:Arial,sans-serif;font-size:11px;color:rgba(240,235,225,0.32);animation:gfade 3s ease infinite;letter-spacing:0.05em;}
+@keyframes gfade{0%,100%{opacity:0.4;}50%{opacity:1;}}
+
+.gen-list{width:100%;background:rgba(201,169,110,0.04);border:1px solid rgba(201,169,110,0.1);border-radius:10px;padding:13px 14px;display:flex;flex-direction:column;gap:8px;}
+.gen-item{font-family:Arial,sans-serif;font-size:11px;color:rgba(240,235,225,0.45);display:flex;gap:8px;align-items:center;}
+.gcheck{color:#C9A96E;font-size:11px;}
+
+/* CTA */
+.cta-btn{width:100%;padding:15px;background:#C9A96E;border:none;border-radius:100px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#080706;cursor:pointer;position:relative;z-index:2;box-shadow:0 8px 28px rgba(201,169,110,0.4);margin-bottom:8px;}
+.trust-txt{font-family:Arial,sans-serif;font-size:9px;color:rgba(240,235,225,0.18);text-align:center;letter-spacing:0.04em;position:relative;z-index:2;}
+
+/* Nav dots */
+.dots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
+.dot-btn{width:7px;height:7px;border-radius:50%;background:rgba(201,169,110,0.2);cursor:pointer;border:none;transition:all 0.25s;}
+.dot-btn.on{background:rgba(201,169,110,0.8);width:20px;border-radius:4px;}
+
+/* NOTES */
+.notes{flex:1;min-width:240px;max-width:320px;}
+.n-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px;font-family:Arial,sans-serif;}
+.n-sub{font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:18px;line-height:1.5;font-family:Arial,sans-serif;}
+.n-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:14px 15px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.07);}
+.n-label{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-bottom:6px;font-family:Arial,sans-serif;}
+.n-val{font-size:13px;color:#fff;line-height:1.5;font-family:Georgia,serif;font-style:italic;}
+.n-why{font-size:11.5px;color:rgba(255,255,255,0.42);margin-top:6px;line-height:1.55;font-family:Arial,sans-serif;}
+.viral-tag{display:inline-block;background:#C9A96E;color:#080706;font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;margin-right:5px;letter-spacing:0.05em;font-family:Arial,sans-serif;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="phone-shell">
+    <div class="phone">
+      <div class="notch"></div>
+      <div style="position:relative;">
+
+        <!-- SCREEN 1: NAME -->
+        <div class="screen on" id="sc1">
+          <div class="bg-glow"></div>
+          <div class="prog"><div class="ps now"></div><div class="ps"></div><div class="ps"></div><div class="ps"></div></div>
+          <div class="logo-txt">Futura</div>
+          <div class="step-tag">Step 1 of 4 — Who are you?</div>
+          <div class="qhead">What do we<br>call you,<br><em>seeker?</em></div>
+          <div class="qsub">Your name is placed at the heart of every reading. This is yours alone.</div>
+          <input class="name-inp" id="nameField" placeholder="Your first name..." />
+          <div class="hint-line">✦ &nbsp; Every reading begins with your name — no one else's</div>
+          <button class="cta-btn" onclick="go(2)">This is me →</button>
+          <div class="trust-txt">Private · Never shared · Yours only</div>
+        </div>
+
+        <!-- SCREEN 2: DOB -->
+        <div class="screen" id="sc2">
+          <div class="bg-glow"></div>
+          <div class="prog"><div class="ps done"></div><div class="ps now"></div><div class="ps"></div><div class="ps"></div></div>
+          <div class="logo-txt">Futura</div>
+          <div class="step-tag">Step 2 of 4 — Your birth</div>
+          <div class="qhead">When did<br>you arrive<br><em>in this world?</em></div>
+          <div class="qsub">Your date of birth unlocks your star sign, life path number, and every cosmic pattern active in your life right now.</div>
+          <div class="dob-row">
+            <select class="dob-sel" id="selDay"><option>Day</option>
+              <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option>23</option><option>24</option><option>25</option><option>26</option><option>27</option><option>28</option><option>29</option><option>30</option><option>31</option>
+            </select>
+            <select class="dob-sel" id="selMonth" onchange="revealSign()">
+              <option value="">Month</option>
+              <option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select>
+            <select class="dob-sel" id="selYear"><option>Year</option></select>
+          </div>
+          <div class="sign-box" id="signReveal">
+            <div class="s-icon" id="signIco">♓</div>
+            <div>
+              <div class="s-name" id="signNm">Pisces</div>
+              <div class="s-note" id="signNt">Deeply intuitive — your reading will reflect this</div>
+            </div>
+          </div>
+          <button class="cta-btn" onclick="go(3)">Reveal my sign →</button>
+          <div class="trust-txt">Used only to enrich your reading</div>
+        </div>
+
+        <!-- SCREEN 3: RELIGION -->
+        <div class="screen" id="sc3">
+          <div class="bg-glow"></div>
+          <div class="prog"><div class="ps done"></div><div class="ps done"></div><div class="ps now"></div><div class="ps"></div></div>
+          <div class="logo-txt">Futura</div>
+          <div class="step-tag">Step 3 of 4 — Your world view</div>
+          <div class="qhead">How do you<br>understand<br><em>the world?</em></div>
+          <div class="qsub">This shapes the language of your reading — every belief is honoured here.</div>
+          <div class="rel-grid">
+            <div class="ropt" onclick="pickRel(this,'✝️','Christian','God has a plan for you — your reading reveals exactly where you stand in it right now')">
+              <div class="r-ico">✝️</div><div class="r-name">Christian</div><div class="r-note">Faith & divine plan</div>
+            </div>
+            <div class="ropt" onclick="pickRel(this,'☪️','Muslim','Your path is written — your reading illuminates the signs already appearing around you')">
+              <div class="r-ico">☪️</div><div class="r-name">Muslim</div><div class="r-note">Purpose & submission</div>
+            </div>
+            <div class="ropt" onclick="pickRel(this,'✨','Spiritual','The universe has been sending you signals. Your reading translates what they mean')">
+              <div class="r-ico">✨</div><div class="r-name">Spiritual</div><div class="r-note">Energy & universe</div>
+            </div>
+            <div class="ropt" onclick="pickRel(this,'🕉️','Hindu','Your karma is speaking. Your reading shows where your dharmic path leads from here')">
+              <div class="r-ico">🕉️</div><div class="r-name">Hindu</div><div class="r-note">Karma & dharma</div>
+            </div>
+            <div class="ropt" onclick="pickRel(this,'☸️','Buddhist','The pattern of your mind and your hand are one. Your reading shows where they align')">
+              <div class="r-ico">☸️</div><div class="r-name">Buddhist</div><div class="r-note">Mindfulness & path</div>
+            </div>
+            <div class="ropt" onclick="pickRel(this,'🔬','No religion','Science has identified these patterns for 5,000 years. Your reading maps what they mean for you')">
+              <div class="r-ico">🔬</div><div class="r-name">No religion</div><div class="r-note">Logic & science</div>
+            </div>
+          </div>
+          <div class="tone-box" id="tonePreview">
+            <div class="tone-tag">Your reading will say...</div>
+            <div class="tone-txt" id="toneTxt"></div>
+          </div>
+          <button class="cta-btn" onclick="go(4)">This is how I see the world →</button>
+          <div class="trust-txt">No belief excluded · All are equal here</div>
+        </div>
+
+        <!-- SCREEN 4: GENERATING -->
+        <div class="screen" id="sc4">
+          <div class="bg-glow"></div>
+          <div class="prog"><div class="ps done"></div><div class="ps done"></div><div class="ps done"></div><div class="ps now"></div></div>
+          <div class="logo-txt">Futura</div>
+          <div class="gen-area">
+            <div class="orb">
+              <div class="o-r or1"></div>
+              <div class="o-r or2"></div>
+              <div class="o-r or3"></div>
+              <div class="o-spin"></div>
+              <div class="o-palm">🤚</div>
+              <div class="o-core"></div>
+            </div>
+            <div class="gen-name" id="genGreet">Building your reading...</div>
+            <div class="gen-status" id="genStat">Reading the ancient lines...</div>
+            <div class="gen-list">
+              <div class="gen-item"><span class="gcheck">✦</span> Your palm lines mapped to your patterns</div>
+              <div class="gen-item"><span class="gcheck">✦</span> Star sign energy cross-referenced</div>
+              <div class="gen-item"><span class="gcheck">✦</span> Life events window identified</div>
+              <div class="gen-item"><span class="gcheck">✦</span> Personal advisor calibrated to you</div>
+            </div>
+          </div>
+          <button class="cta-btn">Reveal my future →</button>
+          <div class="trust-txt">Your reading is uniquely yours — built from your palm, your sign, your belief</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="dots">
+      <button class="dot-btn on" id="d1" onclick="go(1)"></button>
+      <button class="dot-btn" id="d2" onclick="go(2)"></button>
+      <button class="dot-btn" id="d3" onclick="go(3)"></button>
+      <button class="dot-btn" id="d4" onclick="go(4)"></button>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-family:Arial,sans-serif;font-size:11px;color:rgba(255,255,255,0.3);">← tap dots or buttons to navigate →</div>
+  </div>
+
+  <!-- NOTES PANEL -->
+  <div class="notes">
+    <div class="n-title">Viral strategy — each screen</div>
+    <div class="n-sub">Every question is a conversion event, not just data collection. Here's why each one works.</div>
+
+    <div class="n-card">
+      <div class="n-label">Screen 1 — Name</div>
+      <div class="n-val">"What do we call you, seeker?"</div>
+      <div class="n-why"><span class="viral-tag">VIRAL</span> Every reading opens "Sarah, something is shifting..." People screenshot this and send it. Their name on a mystical reading = instant share.</div>
+    </div>
+
+    <div class="n-card">
+      <div class="n-label">Screen 2 — Date of birth</div>
+      <div class="n-val">Star sign auto-reveals the moment they pick a month</div>
+      <div class="n-why"><span class="viral-tag">VIRAL</span> That instant "oh!" when their sign appears is a dopamine hit before the paywall. DOB also gives you: star sign, life path number, Mercury retrograde dates, numerology — the reading gets 4x richer for free.</div>
+    </div>
+
+    <div class="n-card">
+      <div class="n-label">Screen 3 — Belief / religion</div>
+      <div class="n-val">6 options — each changes the reading language completely</div>
+      <div class="n-why"><span class="viral-tag">VIRAL</span> Christian user shares reading in church WhatsApp group. Muslim user shares with family. Spiritual user posts to Instagram. Each belief system is its own sharing network. One app — six organic communities.</div>
+    </div>
+
+    <div class="n-card">
+      <div class="n-label">Screen 4 — Generating</div>
+      <div class="n-val">Name shown. Four data points being "processed" visibly</div>
+      <div class="n-why">By the time they hit the paywall they feel they've already received something. The four checklist items are features they haven't seen yet — each one is a reason to subscribe.</div>
+    </div>
+
+    <div class="n-card">
+      <div class="n-label">The #1 viral mechanic to build next</div>
+      <div class="n-val">"Share your reading" card</div>
+      <div class="n-why"><span class="viral-tag">CRITICAL</span> After every reading: generate a dark branded card. Their name. Their star sign. One line of their reading — blurred at the end. "futura.ai" bottom right. One tap to Instagram Stories. This is how it spreads. The blur makes the viewer need their own reading.</div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// Fill years
+var ysel = document.getElementById('selYear');
+for(var y=2006;y>=1940;y--){var o=document.createElement('option');o.value=y;o.textContent=y;ysel.appendChild(o);}
+
+var signs=[
+  {name:'Capricorn',ico:'♑',note:'Ambitious & disciplined — your reading focuses on what you are building'},
+  {name:'Aquarius',ico:'♒',note:'Visionary & unconventional — your reading reflects your unique path'},
+  {name:'Pisces',ico:'♓',note:'Deeply intuitive — your reading speaks to what you already sense'},
+  {name:'Aries',ico:'♈',note:'Bold & decisive — your reading cuts straight to what is coming'},
+  {name:'Taurus',ico:'♉',note:'Grounded & determined — your reading focuses on what truly lasts'},
+  {name:'Gemini',ico:'♊',note:'Curious & adaptable — your reading reflects the tension you navigate'},
+  {name:'Cancer',ico:'♋',note:'Emotionally deep — your reading speaks to what lives beneath the surface'},
+  {name:'Leo',ico:'♌',note:'Magnetic & driven — your reading reflects the power moving around you'},
+  {name:'Virgo',ico:'♍',note:'Analytical & precise — your reading is exact and unflinching'},
+  {name:'Libra',ico:'♎',note:'Seeking balance — your reading addresses the tension pulling at you'},
+  {name:'Scorpio',ico:'♏',note:'Intense & transformative — your reading goes to the depths'},
+  {name:'Sagittarius',ico:'♐',note:'Freedom-seeking — your reading reflects the expansion that is coming'}
+];
+
+function revealSign(){
+  var m=parseInt(document.getElementById('selMonth').value);
+  if(!m)return;
+  var s=signs[m-1];
+  document.getElementById('signIco').textContent=s.ico;
+  document.getElementById('signNm').textContent=s.name;
+  document.getElementById('signNt').textContent=s.note;
+  document.getElementById('signReveal').classList.add('show');
+}
+
+function pickRel(el,ico,name,preview){
+  document.querySelectorAll('.ropt').forEach(function(r){r.classList.remove('picked');});
+  el.classList.add('picked');
+  document.getElementById('toneTxt').textContent=preview;
+  document.getElementById('tonePreview').classList.add('show');
+}
+
+var statuses=['Reading the lines of your hand...','Cross-referencing your star sign...','Identifying your life events window...','Calibrating your personal advisor...','Preparing your first reading...'];
+
+function go(n){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on');});
+  document.querySelectorAll('.dot-btn').forEach(function(d){d.classList.remove('on');});
+  document.getElementById('sc'+n).classList.add('on');
+  document.getElementById('d'+n).classList.add('on');
+
+  if(n===4){
+    var nm=document.getElementById('nameField').value||'Seeker';
+    document.getElementById('genGreet').textContent=nm+', your reading is being built...';
+    var i=0;
+    clearInterval(window._si);
+    window._si=setInterval(function(){
+      if(i<statuses.length){document.getElementById('genStat').textContent=statuses[i];i++;}
+      else{clearInterval(window._si);}
+    },1600);
+  }
+}
+</script>
+</body>
+</html>
