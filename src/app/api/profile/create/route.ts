@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { normalizeProfile } from '@/services/profileNormalizationService'
+import { seedMemoryFromOnboarding } from '@/services/stripeService'
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { userId, focusArea, currentState, personalityTrait, ageBand, palmImageUrl } = body
+
+    if (!userId || !focusArea || !currentState || !personalityTrait || !ageBand) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const normalized = normalizeProfile({ focusArea, currentState, personalityTrait, ageBand })
+
+    const supabase = createClient()
+
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .upsert(
+        {
+          user_id: userId,
+          focus_area: focusArea,
+          current_state: currentState,
+          personality_trait: personalityTrait,
+          age_band: ageBand,
+          palm_image_url: palmImageUrl ?? null,
+          core_pattern: normalized.corePattern,
+          emotional_pattern: normalized.emotionalPattern,
+          decision_pattern: normalized.decisionPattern,
+          future_theme: normalized.futureTheme,
+          identity_summary: normalized.identitySummary,
+        },
+        { onConflict: 'user_id' }
+      )
+      .select()
+      .single()
+
+    if (error) throw error
+
+    await seedMemoryFromOnboarding(userId, focusArea, personalityTrait, currentState)
+
+    return NextResponse.json({ profile })
+  } catch (err) {
+    console.error('[profile/create]', err)
+    return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
+  }
+}
