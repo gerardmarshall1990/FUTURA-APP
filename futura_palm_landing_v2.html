@@ -1,0 +1,484 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Outfit:wght@300;400;500&display=swap');
+
+  .wrap {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 40px;
+    padding: 24px 0;
+    flex-wrap: wrap;
+  }
+
+  .phone {
+    width: 320px;
+    border-radius: 42px;
+    background: #080706;
+    border: 2px solid #222018;
+    overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+    flex-shrink: 0;
+  }
+
+  .notch {
+    width: 90px;
+    height: 24px;
+    background: #080706;
+    border-radius: 0 0 16px 16px;
+    margin: 0 auto;
+  }
+
+  .screen {
+    background: #080706;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 20px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ambient {
+    position: absolute;
+    top: -60px; left: 50%;
+    transform: translateX(-50%);
+    width: 420px; height: 420px;
+    background: radial-gradient(circle, rgba(201,169,110,0.11) 0%, rgba(201,169,110,0.04) 45%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .ambient2 {
+    position: absolute;
+    bottom: -80px; left: 50%;
+    transform: translateX(-50%);
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(120,80,200,0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .logo-row {
+    display: flex;
+    justify-content: center;
+    padding: 14px 0 4px;
+    position: relative; z-index: 2;
+  }
+
+  .logo {
+    font-family: 'Cormorant', serif;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.26em;
+    color: rgba(201,169,110,0.6);
+    text-transform: uppercase;
+  }
+
+  .palm-orb-wrap {
+    position: relative;
+    width: 210px; height: 210px;
+    margin: 10px auto 0;
+    z-index: 2;
+    animation: breathe 5s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%,100% { transform: scale(1); filter: brightness(0.9); }
+    50% { transform: scale(1.025); filter: brightness(1.1); }
+  }
+
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+  }
+  .r1 { width:210px;height:210px; border:1px solid rgba(201,169,110,0.07); }
+  .r2 { width:168px;height:168px; border:1px solid rgba(201,169,110,0.12); }
+  .r3 { width:126px;height:126px; border:1px solid rgba(201,169,110,0.19); background:radial-gradient(circle,rgba(201,169,110,0.07) 0%,transparent 70%); }
+  .r4 { width:84px;height:84px; border:1px solid rgba(201,169,110,0.28); background:radial-gradient(circle,rgba(201,169,110,0.14) 0%,transparent 65%); }
+
+  .spin-ring {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:190px; height:190px;
+    border-radius:50%;
+    border:1px solid transparent;
+    border-top-color:rgba(201,169,110,0.5);
+    border-right-color:rgba(201,169,110,0.15);
+    animation:spin 7s linear infinite;
+  }
+  .spin-ring2 {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:148px; height:148px;
+    border-radius:50%;
+    border:1px solid transparent;
+    border-bottom-color:rgba(201,169,110,0.3);
+    animation:spin 4s linear infinite reverse;
+  }
+  @keyframes spin {
+    from{transform:translate(-50%,-50%) rotate(0deg);}
+    to{transform:translate(-50%,-50%) rotate(360deg);}
+  }
+
+  .palm-icon {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    font-size:34px;
+    opacity:0.22;
+    filter:sepia(1) brightness(1.8);
+    animation: palm-pulse 5s ease-in-out infinite;
+  }
+  @keyframes palm-pulse {
+    0%,100%{opacity:0.18;}
+    50%{opacity:0.28;}
+  }
+
+  .dot {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:6px; height:6px;
+    border-radius:50%;
+    background:rgba(201,169,110,0.95);
+    box-shadow:0 0 12px rgba(201,169,110,0.7),0 0 32px rgba(201,169,110,0.25);
+  }
+
+  .copy {
+    text-align:center;
+    position:relative; z-index:2;
+    margin-top:14px;
+  }
+
+  .eyebrow {
+    font-family:'Outfit',sans-serif;
+    font-size:9.5px;
+    font-weight:400;
+    letter-spacing:0.2em;
+    color:rgba(201,169,110,0.55);
+    text-transform:uppercase;
+    margin-bottom:12px;
+  }
+
+  .hl {
+    font-family:'Cormorant',serif;
+    font-size:33px;
+    font-weight:300;
+    line-height:1.1;
+    color:#F0EBE1;
+    letter-spacing:-0.01em;
+    margin-bottom:12px;
+  }
+  .hl em { font-style:italic; color:#C9A96E; }
+
+  .sub {
+    font-family:'Outfit',sans-serif;
+    font-size:12.5px;
+    font-weight:300;
+    line-height:1.65;
+    color:rgba(240,235,225,0.5);
+    max-width:250px;
+    margin:0 auto;
+  }
+  .sub strong { color:rgba(240,235,225,0.75); font-weight:400; }
+
+  .divider {
+    width:24px; height:1px;
+    background:rgba(201,169,110,0.35);
+    margin:16px auto;
+  }
+
+  .proof-strip {
+    display:flex;
+    gap:0;
+    width:100%;
+    margin-bottom:14px;
+    position:relative; z-index:2;
+    border:1px solid rgba(201,169,110,0.12);
+    border-radius:10px;
+    overflow:hidden;
+  }
+
+  .proof-item {
+    flex:1;
+    padding:10px 6px;
+    text-align:center;
+    background:rgba(201,169,110,0.04);
+    border-right:1px solid rgba(201,169,110,0.1);
+  }
+  .proof-item:last-child { border-right:none; }
+
+  .proof-num {
+    font-family:'Cormorant',serif;
+    font-size:20px;
+    font-weight:400;
+    color:#C9A96E;
+    line-height:1;
+    display:block;
+    margin-bottom:3px;
+  }
+
+  .proof-label {
+    font-family:'Outfit',sans-serif;
+    font-size:9px;
+    font-weight:300;
+    letter-spacing:0.06em;
+    color:rgba(240,235,225,0.35);
+    text-transform:uppercase;
+    display:block;
+  }
+
+  .preview-card {
+    width:100%;
+    background:rgba(201,169,110,0.04);
+    border:1px solid rgba(201,169,110,0.13);
+    border-radius:12px;
+    padding:13px 15px;
+    margin-bottom:16px;
+    position:relative; z-index:2;
+  }
+
+  .preview-tag {
+    font-family:'Outfit',sans-serif;
+    font-size:9px;
+    font-weight:400;
+    letter-spacing:0.14em;
+    color:rgba(201,169,110,0.45);
+    text-transform:uppercase;
+    margin-bottom:7px;
+    display:flex;
+    align-items:center;
+    gap:5px;
+  }
+
+  .preview-dot {
+    width:5px;height:5px;border-radius:50%;
+    background:rgba(201,169,110,0.5);
+    animation:blink 2s ease infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  .preview-text {
+    font-family:'Outfit',sans-serif;
+    font-size:11.5px;
+    font-weight:300;
+    line-height:1.65;
+    color:rgba(240,235,225,0.65);
+  }
+
+  .preview-blur {
+    filter:blur(3px);
+    color:rgba(240,235,225,0.35);
+    user-select:none;
+  }
+
+  .unlock-hint {
+    font-family:'Outfit',sans-serif;
+    font-size:10px;
+    font-weight:300;
+    color:rgba(201,169,110,0.45);
+    text-align:right;
+    margin-top:6px;
+    font-style:italic;
+  }
+
+  .cta {
+    width:100%;
+    padding:15px;
+    background:#C9A96E;
+    border:none;
+    border-radius:100px;
+    font-family:'Outfit',sans-serif;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:#080706;
+    cursor:pointer;
+    position:relative; z-index:2;
+    box-shadow:0 8px 28px rgba(201,169,110,0.35), 0 2px 8px rgba(201,169,110,0.2);
+    margin-bottom:10px;
+  }
+
+  .trust {
+    font-family:'Outfit',sans-serif;
+    font-size:9.5px;
+    font-weight:300;
+    color:rgba(240,235,225,0.22);
+    text-align:center;
+    letter-spacing:0.04em;
+    position:relative; z-index:2;
+  }
+
+  /* notes side */
+  .notes {
+    flex:1;
+    min-width:260px;
+    max-width:340px;
+  }
+
+  .notes-head {
+    font-size:14px;
+    font-weight:500;
+    color:var(--color-text-primary);
+    margin-bottom:6px;
+  }
+
+  .notes-sub {
+    font-size:12px;
+    color:var(--color-text-secondary);
+    margin-bottom:20px;
+    line-height:1.5;
+  }
+
+  .copy-block-item {
+    background:var(--color-background-secondary);
+    border-radius:var(--border-radius-lg);
+    padding:14px 16px;
+    margin-bottom:12px;
+  }
+
+  .copy-label {
+    font-size:10px;
+    font-weight:500;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--color-text-secondary);
+    margin-bottom:6px;
+  }
+
+  .copy-text {
+    font-size:13px;
+    font-weight:400;
+    color:var(--color-text-primary);
+    line-height:1.55;
+    font-family:var(--font-serif);
+    font-style:italic;
+  }
+
+  .copy-why {
+    font-size:12px;
+    color:var(--color-text-secondary);
+    margin-top:6px;
+    line-height:1.5;
+    font-family:var(--font-sans);
+    font-style:normal;
+  }
+
+</style>
+
+<div class="wrap">
+
+  <div class="phone">
+    <div class="notch"></div>
+    <div class="screen">
+      <div class="ambient"></div>
+      <div class="ambient2"></div>
+
+      <div class="logo-row"><span class="logo">Futura</span></div>
+
+      <div class="palm-orb-wrap">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="ring r4"></div>
+        <div class="spin-ring"></div>
+        <div class="spin-ring2"></div>
+        <div class="palm-icon">🤚</div>
+        <div class="dot"></div>
+      </div>
+
+      <div class="copy">
+        <div class="eyebrow">5,000 years of wisdom · AI precision</div>
+        <div class="hl">
+          Your palm holds<br>a map of <em>what's<br>coming next.</em>
+        </div>
+        <div class="sub">
+          Ancient palmistry identified patterns in your lines that <strong>repeat throughout your life.</strong> Futura reads them with AI — and tells you what's building right now.
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="proof-strip">
+        <div class="proof-item">
+          <span class="proof-num">5K</span>
+          <span class="proof-label">Years old</span>
+        </div>
+        <div class="proof-item">
+          <span class="proof-num">3</span>
+          <span class="proof-label">Lines read</span>
+        </div>
+        <div class="proof-item">
+          <span class="proof-num">1</span>
+          <span class="proof-label">Palm. Yours.</span>
+        </div>
+      </div>
+
+      <div class="preview-card">
+        <div class="preview-tag">
+          <div class="preview-dot"></div>
+          Live reading · Based on your palm
+        </div>
+        <div class="preview-text">
+          Your heart line carries a pattern of deep emotional processing. A shift in your closest relationship is already in motion — <span class="preview-blur">the timing of this is closer than you think. Your fate line shows a decision point arriving within weeks that will determine whether this chapter closes or opens into something entirely different...</span>
+        </div>
+        <div class="unlock-hint">scan your palm to reveal yours →</div>
+      </div>
+
+      <button class="cta">Scan your palm — free</button>
+      <div class="trust">Takes 90 seconds &nbsp;·&nbsp; No account &nbsp;·&nbsp; Privately analysed</div>
+
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="notes-head">New copy breakdown</div>
+    <div class="notes-sub">Every line is designed to do a specific psychological job. Here's the full copy block to hand your developer.</div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Eyebrow — Credibility anchor</div>
+      <div class="copy-text">"5,000 years of wisdom · AI precision"</div>
+      <div class="copy-why">Immediately tells them this isn't a gimmick. Ancient + modern = credibility without explaining it.</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Headline — The hook</div>
+      <div class="copy-text">"Your palm holds a map of what's coming next."</div>
+      <div class="copy-why">Positions the palm as THE key. Personal, specific, mysterious. "Map" is powerful — it implies accuracy and navigation, not guessing.</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Subline — The why it works</div>
+      <div class="copy-text">"Ancient palmistry identified patterns in your lines that repeat throughout your life. Futura reads them with AI — and tells you what's building right now."</div>
+      <div class="copy-why">Validates the method (ancient + proven), explains the mechanism (AI reads it), and creates urgency (building RIGHT NOW).</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Proof strip — Instant trust</div>
+      <div class="copy-text">5,000 Years Old · 3 Lines Read · 1 Palm. Yours.</div>
+      <div class="copy-why">The "1 Palm. Yours." is the anchor. It makes it feel uniquely personal, not generic.</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Preview card label</div>
+      <div class="copy-text">"Live reading · Based on your palm"</div>
+      <div class="copy-why">The pulsing dot makes it feel real-time. "Based on your palm" reminds them this is uniquely theirs.</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">CTA button</div>
+      <div class="copy-text">"Scan your palm — free"</div>
+      <div class="copy-why">"Scan" sounds technological and specific. "Free" removes the last hesitation. Short, confident, no fluff.</div>
+    </div>
+
+    <div class="copy-block-item">
+      <div class="copy-label">Trust line</div>
+      <div class="copy-text">"Takes 90 seconds · No account · Privately analysed"</div>
+      <div class="copy-why">"Privately analysed" is new and important — people are nervous about uploading a photo of their hand. Address it head-on.</div>
+    </div>
+
+  </div>
+
+</div>
