@@ -351,7 +351,7 @@ export default function ChatPage() {
                 resize: 'none', color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)', fontWeight: 300,
                 fontSize: '0.925rem', lineHeight: 1.55,
-                placeholder: 'color: var(--text-muted)',
+
                 minHeight: '24px', maxHeight: '120px',
               }}
             />

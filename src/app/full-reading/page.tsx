@@ -1,14 +1,11 @@
-// ============================================================
-// src/app/full-reading/page.tsx
-// ============================================================
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
 
-export default function FullReadingPage() {
+function FullReadingPage() {
   const router = useRouter()
   const params = useSearchParams()
   const { userId, setUnlocked } = useSessionStore()
@@ -126,5 +123,13 @@ export default function FullReadingPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+export default function FullReadingPageWrapper() {
+  return (
+    <Suspense>
+      <FullReadingPage />
+    </Suspense>
   )
 }

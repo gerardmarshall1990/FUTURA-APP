@@ -127,11 +127,9 @@ export async function POST(req: NextRequest) {
     const totalUserMessages = history.filter(m => m.role === 'user').length + 1
     if (totalUserMessages % 6 === 0) {
       const allMessages = [...history, { role: 'user' as const, content: message }, { role: 'assistant' as const, content: response }]
-      supabaseAdmin
-        .from('user_insights_memory')
-        .select('key_theme')
-        .eq('user_id', userId)
-        .then(async ({ data: existing }) => {
+      Promise.resolve()
+        .then(async () => {
+          const { data: existing } = await supabaseAdmin.from('user_insights_memory').select('key_theme').eq('user_id', userId)
           const existingKeys = (existing ?? []).map((t: { key_theme: string }) => t.key_theme)
           const themes = await extractMemoryThemes(allMessages, profile.identity_summary, existingKeys)
           if (themes.length > 0) {

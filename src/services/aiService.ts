@@ -165,7 +165,7 @@ export async function generateFullReading(
   return {
     teaserText: teaserParagraphs.join('\n\n'),
     cutLine,
-    lockedText: lockedParagraphs.join('\n\n') || paragraphs[paragraphs.length - 1] ?? '',
+    lockedText: lockedParagraphs.join('\n\n') || (paragraphs[paragraphs.length - 1] ?? ''),
   }
 }
 
