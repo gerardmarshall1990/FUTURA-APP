@@ -10,8 +10,8 @@ import { shouldTriggerPaywall } from '@/services/stripeService'
 import type { AdvisorSystemPromptInput } from '@/lib/prompts/advisorPrompt'
 
 const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
 )
 
 export async function POST(req: NextRequest) {
