@@ -135,6 +135,16 @@ p {
   50%       { opacity: 0; }
 }
 
+@keyframes palm-pulse {
+  0%, 100% { opacity: 0.13; }
+  50%       { opacity: 0.22; }
+}
+
+@keyframes spin-centered {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 .animate-fade-up   { animation: fadeUp 0.7s var(--ease-out) both; }
 .animate-fade-in   { animation: fadeIn 0.5s ease both; }
 .animate-pulse-orb { animation: pulse-orb 4s ease-in-out infinite; }

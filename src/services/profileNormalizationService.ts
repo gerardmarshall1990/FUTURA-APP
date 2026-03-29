@@ -88,6 +88,22 @@ function buildIdentitySummary(
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
+// ─── Belief Tone Builder ────────────────────────────────────────────────────
+
+export function buildBeliefTone(beliefSystem: string | undefined): string {
+  const tones: Record<string, string> = {
+    Christian: 'Speak in terms of divine plan, purpose, and God\'s timing. Frame insights as part of a larger plan that is unfolding. Use language that resonates with faith and trust in a higher design.',
+    Muslim: 'Speak in terms of written path, signs, and Allah\'s will. Frame insights as part of what has been written. Use language that resonates with submission to a greater wisdom and purpose.',
+    Spiritual: 'Speak in terms of energy, the universe, and signals. Frame insights as alignment and flow. Use language that resonates with cosmic connection and universal intelligence.',
+    Hindu: 'Speak in terms of karma, dharma, and the path forward. Frame insights as part of a karmic cycle. Use language that resonates with purpose, duty, and spiritual evolution.',
+    Buddhist: 'Speak in terms of mindfulness, impermanence, and the path. Frame insights as part of an unfolding awareness. Use language that resonates with presence, detachment, and inner clarity.',
+    'No religion': 'Speak in terms of science, pattern recognition, and statistical probability. Frame insights as data-driven observations. Use language that resonates with logic, evidence, and rational analysis.',
+  }
+  return tones[beliefSystem ?? ''] ?? tones['Spiritual']
+}
+
+// ─── Main Export ─────────────────────────────────────────────────────────────
+
 export function normalizeProfile(answers: OnboardingAnswers): NormalizedProfile {
   const { corePattern, emotionalPattern, decisionPattern } = traitPatterns[answers.personalityTrait]
   const futureTheme = futureThemes[answers.currentState]

@@ -39,6 +39,9 @@ export interface PolishPromptInput {
   lockedRaw: string
   identitySummary: string
   focusArea: FocusArea
+  name?: string
+  beliefSystem?: string
+  starSign?: string
 }
 
 // ─── System Prompts ───────────────────────────────────────────────────────────
@@ -170,15 +173,24 @@ The reading should feel as though it could only have been written for this speci
 }
 
 export function buildPolishUserPrompt(input: PolishPromptInput): string {
+  const personalContext = [
+    input.name ? `Name: ${input.name}` : null,
+    input.starSign ? `Star sign: ${input.starSign}` : null,
+    input.beliefSystem ? `Belief system: ${input.beliefSystem}` : null,
+  ].filter(Boolean).join('\n')
+
   return `Here is the reading assembled from blocks. Polish it into a cohesive, flowing piece.
 
 IDENTITY CONTEXT (do not repeat directly, but let it inform the voice):
 ${input.identitySummary}
 
-FOCUS AREA: ${input.focusArea.replace('_', ' ')}
+${personalContext ? `PERSONAL CONTEXT:\n${personalContext}\n` : ''}FOCUS AREA: ${input.focusArea.replace('_', ' ')}
 
 RAW READING:
 ${input.teaserRaw}
+
+${input.name ? `Use the name "${input.name}" once naturally in the reading — not as the first word, but placed where it feels personal and direct.` : ''}
+${input.beliefSystem ? `Adapt the language tone to resonate with their ${input.beliefSystem} worldview without being heavy-handed.` : ''}
 
 Polish this now. Return only the polished paragraphs.`
 }

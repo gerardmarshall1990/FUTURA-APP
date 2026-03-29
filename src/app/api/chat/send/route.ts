@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
       lockedText:       isUnlocked ? reading.locked_text : undefined,
       isUnlocked,
       isSubscribed,
+      beliefSystem:     profile.belief_system ?? undefined,
+      firstName:        profile.first_name ?? undefined,
     }
 
     const history = (historyMessages ?? []).map(m => ({

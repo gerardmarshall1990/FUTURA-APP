@@ -17,6 +17,7 @@
  */
 
 import type { FocusArea } from '@/services/profileNormalizationService'
+import { buildBeliefTone } from '@/services/profileNormalizationService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,8 @@ export interface AdvisorSystemPromptInput {
   lockedText?: string
   isUnlocked: boolean
   isSubscribed: boolean
+  beliefSystem?: string
+  firstName?: string
 }
 
 export interface AdvisorMessageContext {
@@ -120,6 +123,14 @@ ACCESS LEVEL & DEPTH
 ${paywallGuidance[accessLevel]}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LANGUAGE TONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${buildBeliefTone(input.beliefSystem)}
+
+${input.firstName ? `Address the user by their first name "${input.firstName}" when it feels natural — not every message, but enough to feel personal.` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO RESPOND
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -173,7 +184,11 @@ export function buildAdvisorOpeningMessage(input: AdvisorSystemPromptInput): str
   }
 
   const patternOpenings = openings[input.corePattern] ?? openings.mental_overprocessing
-  return patternOpenings[input.focusArea]
+  const message = patternOpenings[input.focusArea]
+  if (input.firstName) {
+    return `${input.firstName}, ${message.charAt(0).toLowerCase()}${message.slice(1)}`
+  }
+  return message
 }
 
 // ─── Intent classification prompt ────────────────────────────────────────────

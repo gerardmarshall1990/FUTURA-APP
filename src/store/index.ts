@@ -43,11 +43,21 @@ interface OnboardingState {
   ageBand: string | null
   palmImageUrl: string | null
   palmPreviewUrl: string | null
+  name: string | null
+  dobDay: number | null
+  dobMonth: number | null
+  dobYear: number | null
+  starSign: string | null
+  lifePathNumber: number | null
+  beliefSystem: string | null
   setFocusArea: (v: string) => void
   setCurrentState: (v: string) => void
   setPersonalityTrait: (v: string) => void
   setAgeBand: (v: string) => void
   setPalmImage: (url: string, preview: string) => void
+  setName: (v: string) => void
+  setDob: (day: number, month: number, year: number, starSign: string, lifePathNumber: number) => void
+  setBeliefSystem: (v: string) => void
   reset: () => void
 }
 
@@ -60,15 +70,27 @@ export const useOnboardingStore = create<OnboardingState>()(
       ageBand: null,
       palmImageUrl: null,
       palmPreviewUrl: null,
+      name: null,
+      dobDay: null,
+      dobMonth: null,
+      dobYear: null,
+      starSign: null,
+      lifePathNumber: null,
+      beliefSystem: null,
       setFocusArea: (v) => set({ focusArea: v }),
       setCurrentState: (v) => set({ currentState: v }),
       setPersonalityTrait: (v) => set({ personalityTrait: v }),
       setAgeBand: (v) => set({ ageBand: v }),
       setPalmImage: (url, preview) => set({ palmImageUrl: url, palmPreviewUrl: preview }),
+      setName: (v) => set({ name: v }),
+      setDob: (day, month, year, starSign, lifePathNumber) => set({ dobDay: day, dobMonth: month, dobYear: year, starSign, lifePathNumber }),
+      setBeliefSystem: (v) => set({ beliefSystem: v }),
       reset: () => set({
         focusArea: null, currentState: null,
         personalityTrait: null, ageBand: null,
         palmImageUrl: null, palmPreviewUrl: null,
+        name: null, dobDay: null, dobMonth: null, dobYear: null,
+        starSign: null, lifePathNumber: null, beliefSystem: null,
       }),
     }),
     { name: 'futura-onboarding' }
