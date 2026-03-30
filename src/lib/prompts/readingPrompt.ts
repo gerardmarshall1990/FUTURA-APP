@@ -203,18 +203,30 @@ export function buildLockedPolishUserPrompt(
   focusArea: FocusArea,
   futureTheme: string,
   palmContext?: string,
+  name?: string,
+  beliefSystem?: string,
+  starSign?: string,
 ): string {
+  const personalContext = [
+    name        ? `Name: ${name}`                   : null,
+    starSign    ? `Star sign: ${starSign}`           : null,
+    beliefSystem ? `Belief system: ${beliefSystem}` : null,
+  ].filter(Boolean).join('\n')
+
   return `Here is the locked deeper continuation to polish.
 
 CONTEXT:
 Identity: ${identitySummary}
 Focus: ${focusArea.replace('_', ' ')}
 Current movement: ${futureTheme}
+${personalContext ? `\nPERSONAL CONTEXT:\n${personalContext}` : ''}
 
 ${palmContext ? `${palmContext}\n` : ''}RAW LOCKED CONTINUATION:
 ${lockedRaw}
 
-${palmContext ? `You may reference specific palm features once to anchor the deeper layer — e.g. what a particular line suggests about what is building.` : ''}
+${name ? `Use the name "${name}" once in this deeper layer if it fits naturally.` : ''}
+${beliefSystem ? `The language tone should resonate with their ${beliefSystem} worldview.` : ''}
+${palmContext ? `You may reference a specific palm feature once to anchor what is building.` : ''}
 
 Polish this into the deeper layer. Return only the polished paragraphs.`
 }

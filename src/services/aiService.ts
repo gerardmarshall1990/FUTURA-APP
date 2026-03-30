@@ -131,7 +131,16 @@ export async function polishReading(
     ),
     complete(
       LOCKED_POLISH_SYSTEM_PROMPT,
-      buildLockedPolishUserPrompt(lockedRaw, identitySummary, focusArea, futureTheme, palmFeatures ? buildPalmContext(palmFeatures) : undefined),
+      buildLockedPolishUserPrompt(
+        lockedRaw,
+        identitySummary,
+        focusArea,
+        futureTheme,
+        palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+        name ?? undefined,
+        beliefSystem ?? undefined,
+        starSign ?? undefined,
+      ),
       'quality',
       400,
       0.7
