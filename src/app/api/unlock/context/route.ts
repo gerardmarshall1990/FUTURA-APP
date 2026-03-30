@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [{ data: profile }, { data: reading }] = await Promise.all([
+    const [
+      { data: profile },
+      { data: reading },
+      { count: paywallViews },
+    ] = await Promise.all([
       supabaseAdmin
         .from('user_profiles')
         .select('first_name, focus_area, emotional_pattern, palm_features_json')
@@ -29,6 +33,14 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single(),
+      // Count previous paywall views — drives tone escalation tier
+      // Queried BEFORE the current visit event is fired by the client,
+      // so 0 = first time, 1 = second time, 2+ = repeat
+      supabaseAdmin
+        .from('engagement_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('event_type', 'paywall_viewed'),
     ])
 
     const expiresAt = reading?.created_at
@@ -52,13 +64,14 @@ export async function GET(req: NextRequest) {
       expiresAt,
       hoursRemaining,
       palmReadingAnchor,
+      exposureCount:     paywallViews ?? 0,
     })
   } catch (err) {
     console.error('[unlock/context]', err)
     return NextResponse.json({
       firstName: null, focusArea: null, emotionalPattern: null,
       cutLine: null, readingCreatedAt: null, expiresAt: null,
-      hoursRemaining: null, palmReadingAnchor: null,
+      hoursRemaining: null, palmReadingAnchor: null, exposureCount: 0,
     })
   }
 }

@@ -99,7 +99,15 @@ function UnlockPageInner() {
           cutLine:           data.cutLine            ?? null,
           hoursRemaining:    data.hoursRemaining     ?? null,
           palmReadingAnchor: data.palmReadingAnchor  ?? null,
+          exposureCount:     data.exposureCount      ?? 0,
         })
+        // Fire paywall_viewed AFTER reading the count so this visit
+        // increments the counter for the NEXT visit (not this one)
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, eventName: 'paywall_viewed' }),
+        }).catch(() => {})
       })
       .catch(() => {})
       .finally(() => setCtxLoaded(true))
