@@ -14,6 +14,7 @@ import { buildBeliefTone } from './profileNormalizationService'
 import { getUserLifecycleState, type LifecycleState } from './lifecycleEngine'
 import { buildPalmContext, type PalmFeatures } from './palmAnalysisService'
 import { interpretPalmFeatures, buildPalmTraitContext, type PalmTraits } from './palmInterpretationService'
+import { buildContinuityContext } from './memoryService'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -62,17 +63,23 @@ export interface FullUserContext {
 
   // Lifecycle
   lifecycleState: LifecycleState
+
+  // Daily insight — today's generated observation (null if not yet generated or subscriber only)
+  todayInsight: string | null
 }
 
 // ─── Assemble Full Context ────────────────────────────────────────────────────
 
 export async function assembleUserContext(userId: string): Promise<FullUserContext | null> {
+  const today = new Date().toISOString().split('T')[0]
+
   const [
     { data: profile },
     { data: user },
     { data: reading },
     memorySnapshot,
     lifecycleState,
+    { data: insightRow },
   ] = await Promise.all([
     supabaseAdmin.from('user_profiles').select('*').eq('user_id', userId).single(),
     supabaseAdmin
@@ -89,6 +96,13 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
       .single(),
     getMemorySnapshot(userId),
     getUserLifecycleState(userId),
+    // Today's insight — fetched in parallel, null if not yet generated
+    supabaseAdmin
+      .from('daily_insights')
+      .select('insight_text')
+      .eq('user_id', userId)
+      .eq('insight_date', today)
+      .maybeSingle(),
   ])
 
   if (!profile) return null
@@ -125,6 +139,7 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     isSubscribed,
     remainingMessages,
     lifecycleState,
+    todayInsight: insightRow?.insight_text ?? null,
   }
 }
 
@@ -174,6 +189,20 @@ export function assemblePromptContext(ctx: FullUserContext): string {
   // Persistent memory — behavioral history from past sessions
   if (ctx.memoryContext) {
     sections.push(ctx.memoryContext)
+  }
+
+  // Continuity context — unresolved and cross-domain recurring themes
+  // Separate from full memory dump: surfaces only what they've been circling
+  const continuityContext = buildContinuityContext(ctx.memorySnapshot)
+  if (continuityContext) {
+    sections.push(continuityContext)
+  }
+
+  // Today's insight — enables cross-surface continuity (insight ↔ chat)
+  if (ctx.todayInsight) {
+    sections.push(
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTODAY'S INSIGHT\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ctx.todayInsight}\n\nIf this insight is directly relevant to what the user is asking, you may reference it: "What I noted in your insight today connects to this..." — use sparingly, only when the connection is genuine.`
+    )
   }
 
   // Lifecycle — where they are in the product journey

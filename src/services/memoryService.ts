@@ -128,6 +128,66 @@ export function buildMemoryContext(snapshot: MemorySnapshot): string {
   return sections.join('\n\n')
 }
 
+// ─── Continuity Context for Chat ─────────────────────────────────────────────
+// Separate from buildMemoryContext() — this surfaces UNRESOLVED and RECURRING
+// themes specifically for the advisor to use as continuity anchors.
+//
+// Difference from buildMemoryContext():
+// - buildMemoryContext()    → complete memory dump, used in all AI calls
+// - buildContinuityContext() → focused on what the user keeps returning to,
+//                              used ONLY in chat advisor to enable active continuity
+
+export function buildContinuityContext(snapshot: MemorySnapshot): string {
+  // "What they've been circling" = chat-sourced themes, most recently updated
+  const activeThemes = [
+    ...snapshot.behavioral,
+    ...snapshot.emotional,
+    ...snapshot.event,
+  ]
+    .filter(m => m.source === 'chat' && m.updated_at)
+    .sort((a, b) => new Date(b.updated_at!).getTime() - new Date(a.updated_at!).getTime())
+    .slice(0, 4)
+
+  // "Cross-domain resonance" = same concept appearing in both behavioral AND emotional
+  // layers. These are themes that are both felt and enacted — highest unresolved signal.
+  const behavioralKeys = new Set(snapshot.behavioral.map(m => m.key))
+  const emotionalKeys  = new Set(snapshot.emotional.map(m => m.key))
+  const crossDomain    = snapshot.behavioral.map(m => m.key).filter(k => emotionalKeys.has(k))
+
+  if (activeThemes.length === 0 && crossDomain.length === 0) return ''
+
+  const lines: string[] = [
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    `CONTINUITY CONTEXT`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+  ]
+
+  if (activeThemes.length > 0) {
+    lines.push(`\nWhat this person has been returning to (most recent first):`)
+    for (const m of activeThemes) {
+      lines.push(`- ${m.key.replace(/_/g, ' ')}: ${m.value}`)
+    }
+  }
+
+  if (crossDomain.length > 0) {
+    lines.push(`\nCross-domain themes — appear in both behavioral and emotional layers (highest unresolved signal):`)
+    for (const k of crossDomain) {
+      const bEntry = snapshot.behavioral.find(m => m.key === k)
+      const eEntry = snapshot.emotional.find(m => m.key === k)
+      if (bEntry && eEntry) {
+        lines.push(`- ${k.replace(/_/g, ' ')}: enacted as "${bEntry.value}" / felt as "${eEntry.value}"`)
+      } else {
+        lines.push(`- ${k.replace(/_/g, ' ')}`)
+      }
+    }
+  }
+
+  lines.push(`
+CONTINUITY USE: When the current message connects to any theme above, name the connection naturally — "This is the same thing that came up before, from a different angle" or "You've been sitting with this for a while." Reference continuity when it genuinely deepens the current response. Not every message — roughly 1 in 4, when the thread is clearly present.`)
+
+  return lines.join('\n')
+}
+
 // ─── Seed from Onboarding ────────────────────────────────────────────────────
 
 export async function seedMemoriesFromOnboarding(
