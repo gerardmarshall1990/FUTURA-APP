@@ -108,6 +108,23 @@ export function buildMemoryContext(snapshot: MemorySnapshot): string {
     sections.push(`BEHAVIORAL PATTERNS:\n${snapshot.behavioral.map(m => `- ${m.key}: ${m.value}`).join('\n')}`)
   }
 
+  // Surface the most recently updated themes from sessions — gives the advisor
+  // immediate awareness of what's been learned in recent conversations
+  const recentSessionThemes = [
+    ...snapshot.behavioral,
+    ...snapshot.emotional,
+    ...snapshot.event,
+  ]
+    .filter(m => m.source === 'chat' && m.updated_at)
+    .sort((a, b) => new Date(b.updated_at!).getTime() - new Date(a.updated_at!).getTime())
+    .slice(0, 5)
+
+  if (recentSessionThemes.length > 0) {
+    sections.push(
+      `RECENT SESSION THEMES (most recent first):\n${recentSessionThemes.map(m => `- ${m.key}: ${m.value}`).join('\n')}`
+    )
+  }
+
   return sections.join('\n\n')
 }
 

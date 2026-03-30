@@ -260,6 +260,7 @@ export function getAdvisorOpeningMessage(ctx: FullUserContext): string {
 
 export interface MemoryTheme {
   key_theme: string
+  memory_type?: 'emotional' | 'behavioral' | 'event'
   description: string
 }
 
@@ -288,13 +289,25 @@ export async function extractMemoryThemes(
     const clean = raw.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (t: unknown) =>
-        t &&
-        typeof t === 'object' &&
-        'key_theme' in (t as object) &&
-        'description' in (t as object)
-    ) as MemoryTheme[]
+    const VALID_TYPES = new Set(['emotional', 'behavioral', 'event'])
+    return parsed
+      .filter(
+        (t: unknown) =>
+          t &&
+          typeof t === 'object' &&
+          'key_theme' in (t as object) &&
+          'description' in (t as object)
+      )
+      .map((t: unknown) => {
+        const theme = t as Record<string, unknown>
+        return {
+          key_theme: theme.key_theme as string,
+          memory_type: VALID_TYPES.has(theme.memory_type as string)
+            ? (theme.memory_type as MemoryTheme['memory_type'])
+            : 'behavioral',
+          description: theme.description as string,
+        }
+      }) as MemoryTheme[]
   } catch {
     return []
   }

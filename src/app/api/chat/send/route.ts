@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
             themes.map(t =>
               writeMemory({
                 user_id: userId,
-                memory_type: 'behavioral',
+                memory_type: t.memory_type ?? 'behavioral',
                 key: t.key_theme,
                 value: t.description,
                 confidence: 0.7,

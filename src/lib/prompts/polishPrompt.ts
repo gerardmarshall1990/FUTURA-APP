@@ -65,11 +65,16 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `You are analyzing a conversation
 Extract 1–3 key themes from the conversation. Each theme should be:
 - A short label (2–5 words, snake_case format)
 - A brief description (1 sentence)
+- A memory_type classification:
+  - "emotional" — feelings, fears, avoidances, emotional states they return to
+  - "behavioral" — decision patterns, habits, repeated actions or tendencies
+  - "event" — specific life situations or circumstances mentioned
 
 Output as JSON array only. Example:
 [
-  {"key_theme": "relationship_hesitation", "description": "Frequently asks about relationship dynamics and seems to delay acting on what they already sense"},
-  {"key_theme": "career_crossroads", "description": "Multiple questions about direction suggest an unresolved career or life path decision"}
+  {"key_theme": "relationship_hesitation", "memory_type": "emotional", "description": "Frequently returns to relationship dynamics and seems to delay acting on what they already sense"},
+  {"key_theme": "career_crossroads", "memory_type": "behavioral", "description": "Multiple questions about direction suggest an unresolved career decision being circled"},
+  {"key_theme": "job_transition_pending", "memory_type": "event", "description": "Mentioned a pending career move they have not yet committed to"}
 ]
 
 Output only valid JSON. Nothing else.`
