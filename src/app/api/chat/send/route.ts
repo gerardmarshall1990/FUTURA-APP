@@ -141,6 +141,12 @@ export async function POST(req: NextRequest) {
         .catch(err => console.error('[memory extraction]', err))
     }
 
+    // Update last_active_at — drives lifecycle state for reactivation logic
+    void supabaseAdmin
+      .from('users')
+      .update({ last_active_at: new Date().toISOString() })
+      .eq('id', userId)
+
     return NextResponse.json({ response, sessionId: activeSessionId, remainingMessages: newCount })
   } catch (err) {
     console.error('[chat/send]', err)

@@ -98,8 +98,8 @@ export default function HomePage() {
           </h1>
         </div>
 
-        {/* Daily Insight Card */}
-        {insight && (
+        {/* Daily Insight Card — subscribers see full insight, non-subscribers see locked teaser */}
+        {insight && isSubscribed ? (
           <div className="animate-fade-up delay-200" style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
@@ -128,7 +128,71 @@ export default function HomePage() {
               {insight.insight_text}
             </p>
           </div>
-        )}
+        ) : !isSubscribed ? (
+          /* Locked insight card — drives to paywall with insight source context */
+          <button
+            className="animate-fade-up delay-200"
+            onClick={() => router.push('/unlock?source=insight')}
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.2rem',
+              width: '100%',
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: '0.6rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem' }}>✦</span>
+                <p style={{
+                  fontFamily: 'var(--font-body)', fontSize: '0.65rem',
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: 'var(--gold)',
+                }}>
+                  Today&apos;s Insight
+                </p>
+              </div>
+              <p style={{
+                fontFamily: 'var(--font-body)', fontSize: '0.65rem',
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                color: 'rgba(201,169,110,0.5)',
+              }}>
+                New today
+              </p>
+            </div>
+
+            {/* Blurred preview */}
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 1,
+                background: 'linear-gradient(to bottom, transparent 20%, var(--bg-card) 85%)',
+                borderRadius: '4px',
+              }} />
+              <p style={{
+                fontFamily: 'var(--font-display)', fontStyle: 'italic',
+                fontSize: '0.95rem', color: 'var(--text-secondary)',
+                lineHeight: 1.65,
+                filter: 'blur(4px)',
+                userSelect: 'none', pointerEvents: 'none',
+              }}>
+                {insight?.insight_text ?? 'A new pattern observation was generated for you today.'}
+              </p>
+            </div>
+
+            <p style={{
+              fontFamily: 'var(--font-body)', fontSize: '0.72rem',
+              color: 'rgba(201,169,110,0.65)', marginTop: '0.5rem',
+              letterSpacing: '0.03em',
+            }}>
+              Read today&apos;s insight →
+            </p>
+          </button>
+        ) : null}
 
         {/* Lifecycle Triggers (FOMO / Reactivation Cards) */}
         {triggers.length > 0 && triggers.map((trigger, i) => (
@@ -144,7 +208,7 @@ export default function HomePage() {
               cursor: 'pointer',
             }}
             onClick={() => {
-              if (trigger.trigger_type.startsWith('fomo')) router.push('/unlock')
+              if (trigger.trigger_type.startsWith('fomo')) router.push('/unlock?source=trigger')
               else router.push('/chat')
             }}
           >
@@ -170,7 +234,7 @@ export default function HomePage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
           <QuickAction icon="💬" label="Chat" sub="Ask anything" onClick={() => router.push('/chat')} />
           <QuickAction icon="🤚" label="Reading" sub="View your reading" onClick={() => router.push(isUnlocked ? '/full-reading' : '/reading')} />
-          <QuickAction icon="📅" label="Insights" sub={isSubscribed ? 'Daily insight' : 'Subscribe for daily'} onClick={() => router.push(isSubscribed ? '/home' : '/unlock')} />
+          <QuickAction icon="📅" label="Insights" sub={isSubscribed ? 'Daily insight' : 'Subscribe for daily'} onClick={() => router.push(isSubscribed ? '/home' : '/unlock?source=insight')} />
           <QuickAction icon="📡" label="Patterns" sub="Your patterns" onClick={() => router.push('/chat')} />
         </div>
 
@@ -211,7 +275,7 @@ export default function HomePage() {
         {/* CTA for non-subscribers */}
         {!isSubscribed && (
           <div className="animate-fade-up delay-500" style={{ width: '100%', marginTop: '0.5rem' }}>
-            <PremiumButton onClick={() => router.push('/unlock')} variant="outline" size="md">
+            <PremiumButton onClick={() => router.push('/unlock?source=default')} variant="outline" size="md">
               Unlock full access
             </PremiumButton>
           </div>

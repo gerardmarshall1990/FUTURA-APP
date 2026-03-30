@@ -11,8 +11,13 @@ export async function GET(req: NextRequest) {
 
     let triggers = await getPendingTriggers(userId)
 
-    if (triggers.length === 0) {
-      // Need full context to generate personalized triggers
+    // Regenerate if no pending triggers exist, or existing ones are stale (>24h old).
+    // Prevents: (a) AI generation on every home load, (b) stale copy after days away.
+    const areFresh = triggers.length > 0 &&
+      triggers[0].created_at != null &&
+      (Date.now() - new Date(triggers[0].created_at).getTime()) < 24 * 60 * 60 * 1000
+
+    if (!areFresh) {
       const ctx = await assembleUserContext(userId)
       if (ctx) {
         triggers = await generateLifecycleTriggers(ctx)

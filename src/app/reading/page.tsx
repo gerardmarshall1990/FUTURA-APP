@@ -11,6 +11,15 @@ interface Reading {
   cutLine: string
   lockedText: string | null
   isUnlocked: boolean
+  firstName: string | null
+  focusArea: string | null
+  hoursRemaining: number | null
+}
+
+const FOCUS_DEPTH_LABELS: Record<string, string> = {
+  love:           'what is building in your love life',
+  money:          'the financial timing window your pattern is approaching',
+  life_direction: 'the specific shift your pattern is moving toward',
 }
 
 // ─── Reading Paragraph ────────────────────────────────────────────────────────
@@ -34,29 +43,49 @@ function ReadingParagraph({ text, index }: { text: string; index: number }) {
   )
 }
 
-// ─── Blurred Cut Line ─────────────────────────────────────────────────────────
+// ─── Cut Zone ─────────────────────────────────────────────────────────────────
 
-function BlurredCutLine({ text }: { text: string }) {
+function CutZone({ cutLine, lockedPreview, focusArea }: {
+  cutLine: string
+  lockedPreview: string
+  focusArea: string | null
+}) {
+  const depthLabel = focusArea ? FOCUS_DEPTH_LABELS[focusArea] : 'what is coming next in your pattern'
+
   return (
-    <div style={{ position: 'relative', marginTop: '0.5rem' }}>
-      {/* Fade gradient mask */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 85%)',
-        borderRadius: '4px',
-      }} />
+    <div style={{ position: 'relative', marginTop: '0.75rem' }}>
+      {/* Context label above the blur */}
       <p style={{
-        color: 'var(--text-secondary)',
-        fontSize: '1rem',
-        lineHeight: 1.8,
+        fontSize: '0.72rem',
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color: 'rgba(201,169,110,0.5)',
         fontFamily: 'var(--font-body)',
-        fontWeight: 300,
-        filter: 'blur(4px)',
-        userSelect: 'none',
-        pointerEvents: 'none',
+        marginBottom: '0.6rem',
       }}>
-        {text}
+        Your reading continues — {depthLabel}
       </p>
+
+      {/* Blurred cut line + locked preview */}
+      <div style={{ position: 'relative' }}>
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 80%)',
+          borderRadius: '4px',
+        }} />
+        <p style={{
+          color: 'var(--text-secondary)',
+          fontSize: '1rem',
+          lineHeight: 1.8,
+          fontFamily: 'var(--font-body)',
+          fontWeight: 300,
+          filter: 'blur(5px)',
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}>
+          {cutLine} {lockedPreview}
+        </p>
+      </div>
     </div>
   )
 }
@@ -68,7 +97,6 @@ export default function ReadingPage() {
   const { userId } = useSessionStore()
   const [reading, setReading] = useState<Reading | null>(null)
   const [loading, setLoading] = useState(true)
-  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
@@ -78,16 +106,15 @@ export default function ReadingPage() {
       .then(data => {
         setReading(data)
         setLoading(false)
+        // Track reading viewed — updates last_active_at for lifecycle state
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, eventName: 'teaser_viewed' }),
+        }).catch(() => {})
       })
       .catch(() => setLoading(false))
   }, [userId, router])
-
-  // Show paywall CTA when user scrolls near bottom
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 120)
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
-  }, [])
 
   if (loading) {
     return (
@@ -98,9 +125,17 @@ export default function ReadingPage() {
   }
 
   const paragraphs = reading?.teaserText?.split('\n\n').filter(Boolean) ?? []
+  const name = reading?.firstName
+  const focusArea = reading?.focusArea ?? null
+  const hoursRemaining = reading?.hoursRemaining
+
+  // Navigate to unlock with source context so paywall copy is relevant
+  function goToUnlock() {
+    router.push('/unlock?source=reading')
+  }
 
   return (
-    <main className="page" style={{ paddingBottom: '7rem' }}>
+    <main className="page" style={{ paddingBottom: '8rem' }}>
       <div className="page-inner">
         <TopBar />
 
@@ -111,7 +146,7 @@ export default function ReadingPage() {
             letterSpacing: '0.14em', textTransform: 'uppercase',
             marginBottom: '0.6rem',
           }}>
-            Your reading
+            {name ? `${name}'s reading` : 'Your reading'}
           </p>
           <h1 style={{
             fontFamily: 'var(--font-display)',
@@ -130,41 +165,43 @@ export default function ReadingPage() {
             <ReadingParagraph key={i} text={para} index={i} />
           ))}
 
-          {/* Cut + blur */}
+          {/* Cut zone with context */}
           {reading?.cutLine && (
             <div className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
-              <BlurredCutLine text={reading.cutLine + ' ' + (reading.lockedText?.slice(0, 80) ?? '')} />
+              <CutZone
+                cutLine={reading.cutLine}
+                lockedPreview={reading.lockedText?.slice(0, 90) ?? ''}
+                focusArea={focusArea}
+              />
             </div>
           )}
         </div>
 
-        {/* Spacer for sticky CTA */}
         <div style={{ height: '3rem' }} />
       </div>
 
-      {/* Sticky unlock CTA */}
+      {/* Sticky unlock CTA — visible on load */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         padding: '1rem 1.25rem 2rem',
-        background: 'linear-gradient(to top, var(--bg) 60%, transparent)',
+        background: 'linear-gradient(to top, var(--bg) 65%, transparent)',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: '0.5rem', zIndex: 10,
-        transform: scrolled ? 'translateY(0)' : 'translateY(4px)',
-        transition: 'transform 0.4s var(--ease-out)',
+        gap: '0.4rem', zIndex: 10,
       }}>
         <div style={{ width: '100%', maxWidth: 420 }}>
-          <PremiumButton
-            onClick={() => router.push('/unlock')}
-            size="lg"
-          >
-            Unlock your full insight
+          <PremiumButton onClick={goToUnlock} size="lg">
+            {name ? `Continue ${name}'s reading` : 'Continue my reading'}
           </PremiumButton>
+
+          {/* Urgency / trust line */}
           <p style={{
-            textAlign: 'center', marginTop: '0.6rem',
-            color: 'var(--text-muted)', fontSize: '0.72rem',
+            textAlign: 'center', marginTop: '0.5rem',
+            color: 'var(--text-muted)', fontSize: '0.7rem',
             letterSpacing: '0.03em',
           }}>
-            See what happens next · One-time from $4.99
+            {hoursRemaining && hoursRemaining > 0
+              ? `Held for you · ${hoursRemaining} hours remaining · One-time from $4.99`
+              : 'One-time from $4.99 · No subscription required'}
           </p>
         </div>
       </div>

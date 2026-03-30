@@ -1,28 +1,112 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { TopBar, Orb, PremiumButton, GoldDivider } from '@/components/shared'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import { buildPaywallCopy, type PaywallSource, type PaywallContext } from '@/lib/paywallCopy'
 
-const UNLOCK_FEATURES = [
-  'The deeper layer of your reading',
-  'What your pattern predicts for the next weeks',
-  '10 conversations with your personal advisor',
-]
+// ─── Withheld Preview Card ─────────────────────────────────────────────────────
+// Shows the blurred cut line — makes the withheld content tangible and specific.
 
-const SUB_FEATURES = [
-  'Everything in the one-time unlock',
-  'Unlimited advisor conversations',
-  'Daily insight updates',
-  'Priority pattern analysis',
-]
+function WithheldCard({ label, text, continuation }: {
+  label: string
+  text: string
+  continuation?: string
+}) {
+  return (
+    <div style={{
+      background: 'rgba(201,169,110,0.04)',
+      border: '1px solid rgba(201,169,110,0.15)',
+      borderRadius: 'var(--radius-md)',
+      padding: '1.1rem',
+      marginBottom: '1rem',
+    }}>
+      <p style={{
+        fontSize: '0.65rem', letterSpacing: '0.1em',
+        textTransform: 'uppercase', color: 'rgba(201,169,110,0.5)',
+        fontFamily: 'var(--font-body)', marginBottom: '0.65rem',
+      }}>
+        {label}
+      </p>
 
-export default function UnlockPage() {
+      <div style={{ position: 'relative' }}>
+        {/* Fade overlay */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          background: 'linear-gradient(to bottom, transparent 10%, var(--bg) 90%)',
+          borderRadius: '4px',
+        }} />
+        <p style={{
+          color: 'var(--text-secondary)',
+          fontSize: '0.95rem', lineHeight: 1.7,
+          fontFamily: 'var(--font-body)', fontWeight: 300,
+          filter: 'blur(4.5px)',
+          userSelect: 'none', pointerEvents: 'none',
+        }}>
+          {text}
+        </p>
+      </div>
+
+      {continuation && (
+        <p style={{
+          color: 'rgba(201,169,110,0.45)',
+          fontSize: '0.72rem', marginTop: '0.5rem',
+          fontFamily: 'var(--font-body)', fontStyle: 'italic',
+        }}>
+          {continuation}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Feature Row ───────────────────────────────────────────────────────────────
+
+function FeatureRow({ text }: { text: string }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+      <span style={{ color: 'var(--gold)', fontSize: '0.75rem', marginTop: '0.15rem', flexShrink: 0 }}>◆</span>
+      <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5 }}>{text}</span>
+    </div>
+  )
+}
+
+// ─── Unlock Page Inner ─────────────────────────────────────────────────────────
+
+function UnlockPageInner() {
   const router = useRouter()
+  const params = useSearchParams()
   const { userId } = useSessionStore()
+
+  const source = (params.get('source') ?? 'default') as PaywallSource
+
   const [selected, setSelected] = useState<'unlock' | 'subscription'>('unlock')
   const [loading, setLoading] = useState(false)
+  const [ctx, setCtx] = useState<PaywallContext>({})
+  const [ctxLoaded, setCtxLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!userId) { router.push('/'); return }
+
+    fetch(`/api/unlock/context?userId=${userId}`)
+      .then(r => r.json())
+      .then(data => {
+        setCtx({
+          firstName:        data.firstName        ?? null,
+          focusArea:        data.focusArea         ?? null,
+          emotionalPattern: data.emotionalPattern  ?? null,
+          cutLine:          data.cutLine           ?? null,
+          hoursRemaining:   data.hoursRemaining    ?? null,
+        })
+      })
+      .catch(() => {})
+      .finally(() => setCtxLoaded(true))
+  }, [userId, router])
+
+  const copy = buildPaywallCopy(source, ctx)
+  const features = selected === 'unlock' ? copy.unlockFeatures : copy.subFeatures
+  const ctaText  = selected === 'unlock' ? copy.ctaUnlock : copy.ctaSub
 
   async function handlePurchase() {
     if (!userId) return
@@ -45,37 +129,62 @@ export default function UnlockPage() {
       <div className="page-inner">
         <TopBar showBack onBack={() => router.back()} />
 
-        {/* Hero */}
-        <div className="animate-fade-up" style={{ textAlign: 'center', padding: '1.5rem 0 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.75rem' }}>
-            <Orb size={110} intensity={1.6} />
-          </div>
-
+        {/* Hero — eyebrow + headline + subtext from copy engine */}
+        <div className="animate-fade-up" style={{ paddingTop: '1rem', paddingBottom: '1.25rem' }}>
           <p style={{
-            color: 'var(--gold)', fontSize: '0.72rem',
+            color: 'var(--gold)', fontSize: '0.68rem',
             letterSpacing: '0.14em', textTransform: 'uppercase',
-            marginBottom: '0.75rem',
+            marginBottom: '0.6rem',
           }}>
-            There's more
+            {copy.eyebrow}
           </p>
 
           <h1 style={{
             fontFamily: 'var(--font-display)',
-            fontSize: '2.2rem', fontWeight: 300,
-            letterSpacing: '-0.01em', lineHeight: 1.15,
+            fontSize: '1.85rem', fontWeight: 300,
+            letterSpacing: '-0.01em', lineHeight: 1.2,
             marginBottom: '0.75rem',
           }}>
-            Reveal what<br />happens next
+            {copy.headline}
           </h1>
 
           <p style={{
             color: 'var(--text-secondary)',
             fontSize: '0.9rem', lineHeight: 1.65,
-            maxWidth: '300px', margin: '0 auto',
           }}>
-            There's a deeper layer to your pattern than what you've seen.
+            {copy.subtext}
           </p>
         </div>
+
+        {/* Withheld content preview — only when cut line is available */}
+        {ctxLoaded && copy.withheldText && (
+          <div className="animate-fade-up delay-100">
+            <WithheldCard
+              label={copy.withheldLabel ?? 'Your reading continues'}
+              text={copy.withheldText}
+              continuation={copy.withheldContinuation}
+            />
+          </div>
+        )}
+
+        {/* Urgency line — only when present (hours remaining or daily insight) */}
+        {ctxLoaded && copy.urgencyLine && (
+          <div className="animate-fade-up delay-150" style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            marginBottom: '1rem',
+          }}>
+            <div style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: 'var(--gold)', flexShrink: 0,
+            }} />
+            <p style={{
+              color: 'var(--gold)', fontSize: '0.72rem',
+              letterSpacing: '0.04em', fontFamily: 'var(--font-body)',
+            }}>
+              {copy.urgencyLine}
+            </p>
+          </div>
+        )}
 
         <GoldDivider />
 
@@ -102,12 +211,12 @@ export default function UnlockPage() {
           ))}
         </div>
 
-        {/* Plan card */}
-        <div
-          className="animate-fade-up delay-300 glass-card"
-          style={{ marginBottom: '1rem' }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+        {/* Plan card — features from copy engine */}
+        <div className="animate-fade-up delay-300 glass-card" style={{ marginBottom: '1rem' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            alignItems: 'flex-start', marginBottom: '1.25rem',
+          }}>
             <div>
               <p style={{
                 fontFamily: 'var(--font-display)',
@@ -134,19 +243,14 @@ export default function UnlockPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            {(selected === 'unlock' ? UNLOCK_FEATURES : SUB_FEATURES).map((f, i) => (
-              <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                <span style={{ color: 'var(--gold)', fontSize: '0.75rem', marginTop: '0.15rem', flexShrink: 0 }}>◆</span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5 }}>{f}</span>
-              </div>
-            ))}
+            {features.map((f, i) => <FeatureRow key={i} text={f} />)}
           </div>
         </div>
 
         {/* CTA */}
         <div className="animate-fade-up delay-400">
           <PremiumButton onClick={handlePurchase} loading={loading} size="lg">
-            {selected === 'unlock' ? 'Unlock deeper guidance' : 'Start ongoing guidance'}
+            {ctaText}
           </PremiumButton>
 
           {selected === 'unlock' && (
@@ -175,5 +279,13 @@ export default function UnlockPage() {
 
       </div>
     </main>
+  )
+}
+
+export default function UnlockPage() {
+  return (
+    <Suspense>
+      <UnlockPageInner />
+    </Suspense>
   )
 }
