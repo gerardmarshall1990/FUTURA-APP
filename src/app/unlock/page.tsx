@@ -93,11 +93,12 @@ function UnlockPageInner() {
       .then(r => r.json())
       .then(data => {
         setCtx({
-          firstName:        data.firstName        ?? null,
-          focusArea:        data.focusArea         ?? null,
-          emotionalPattern: data.emotionalPattern  ?? null,
-          cutLine:          data.cutLine           ?? null,
-          hoursRemaining:   data.hoursRemaining    ?? null,
+          firstName:         data.firstName         ?? null,
+          focusArea:         data.focusArea          ?? null,
+          emotionalPattern:  data.emotionalPattern   ?? null,
+          cutLine:           data.cutLine            ?? null,
+          hoursRemaining:    data.hoursRemaining     ?? null,
+          palmReadingAnchor: data.palmReadingAnchor  ?? null,
         })
       })
       .catch(() => {})

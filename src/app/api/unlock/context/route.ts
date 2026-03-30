@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const [{ data: profile }, { data: reading }] = await Promise.all([
       supabaseAdmin
         .from('user_profiles')
-        .select('first_name, focus_area, emotional_pattern')
+        .select('first_name, focus_area, emotional_pattern, palm_features_json')
         .eq('user_id', userId)
         .single(),
       supabaseAdmin
@@ -39,20 +39,26 @@ export async function GET(req: NextRequest) {
       ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 3_600_000))
       : null
 
+    // Extract reading_anchor from palm features — the synthesized physical summary
+    const palmFeatures = profile?.palm_features_json as { reading_anchor?: string } | null
+    const palmReadingAnchor = palmFeatures?.reading_anchor ?? null
+
     return NextResponse.json({
-      firstName:       profile?.first_name    ?? null,
-      focusArea:       profile?.focus_area    ?? null,
-      emotionalPattern: profile?.emotional_pattern ?? null,
-      cutLine:         reading?.cut_line      ?? null,
-      readingCreatedAt: reading?.created_at   ?? null,
+      firstName:         profile?.first_name         ?? null,
+      focusArea:         profile?.focus_area          ?? null,
+      emotionalPattern:  profile?.emotional_pattern   ?? null,
+      cutLine:           reading?.cut_line             ?? null,
+      readingCreatedAt:  reading?.created_at           ?? null,
       expiresAt,
       hoursRemaining,
+      palmReadingAnchor,
     })
   } catch (err) {
     console.error('[unlock/context]', err)
     return NextResponse.json({
       firstName: null, focusArea: null, emotionalPattern: null,
-      cutLine: null, readingCreatedAt: null, expiresAt: null, hoursRemaining: null,
+      cutLine: null, readingCreatedAt: null, expiresAt: null,
+      hoursRemaining: null, palmReadingAnchor: null,
     })
   }
 }

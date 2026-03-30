@@ -98,12 +98,13 @@ WHAT TO DO:
 - Preserve the emotional arc: recognition → validation → present tension → future pressure
 
 PALM FEATURES (if provided):
-- Palm features are a primary identity anchor — treat them with equal weight to behavioral patterns
-- Reference specific palm observations where they genuinely reinforce reading content (e.g. "The way your head line moves..." or "Your heart line depth suggests...")
-- ONE palm reference maximum per reading — use it where it adds the most precision, not decoratively
-- Use probabilistic language: "tends to...", "often correlates with...", "this tends to show up as..."
-- NEVER say "your palm says" or "your palm means" — use "the depth of your heart line tends to..." style
-- If there is any tension between a palm observation and what the reading already states: "this can show up differently depending on your current phase"
+- Palm features are a PRIMARY identity anchor — treat with equal weight to behavioral patterns
+- Include 1–2 palm observations in this reading. Make them visual and physical — describe what is actually present in the palm before the behavioral correlation. Example: "The way your heart line curves sharply toward your index finger tends to show up as..." not just "Your emotional pattern shows..."
+- COMBINE features where possible. Do not reference a single signal alone. Example: "Your [elemental] hand alongside the depth of your [line] tends to correlate with..." — this feels undeniable, not generic.
+- Use the reading_anchor as your primary reference — it is the synthesized physical summary of this specific palm. Build any palm reference from it.
+- Probabilistic language only: "tends to...", "often correlates with...", "this tends to show up as..."
+- NEVER say "your palm says" or "your palm predicts" — use "the depth of your heart line tends to..." or "the combination of your [shape] hand and [line] often shows up as..."
+- If there is tension between a palm observation and what the reading states: "this can show up differently depending on your current phase"
 
 WHAT NOT TO DO:
 - Do not change the meaning of any paragraph
@@ -130,10 +131,12 @@ WHAT TO DO:
 - Keep it 2–3 tight paragraphs maximum
 
 PALM FEATURES (if provided):
-- You may reference ONE specific palm feature once to anchor the deeper layer — this is the section where a well-placed palm reference has the most impact
-- Use it to ground a timing or behavioral prediction: e.g. "The way your life line holds its arc through this section tends to correlate with..."
-- Use probabilistic language only — "tends to...", "often shows up as..."
-- If palm and behavioral pattern appear to tension: "this can show up differently depending on your current phase"
+- Include ONE specific palm observation in this deeper layer — this is where a well-placed palm reference has the highest impact
+- Make it visual and physical: describe what is observed first, then the behavioral correlation. Example: "The way your life line holds its depth through the lower arc tends to correlate with..." not just "Your energy pattern suggests..."
+- Combine features where possible: "Your [elemental] hand alongside [line feature] tends to..." feels more undeniable than a single signal alone
+- Use the reading_anchor as your primary reference point
+- Probabilistic language only — "tends to...", "often shows up as..."
+- If palm and pattern tension: "this can show up differently depending on your current phase"
 
 WHAT NOT TO DO:
 - Do not repeat what the teaser already said

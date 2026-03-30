@@ -56,6 +56,12 @@ import type {
   PersonalityTrait,
 } from '@/services/profileNormalizationService'
 
+import {
+  isGenericOutput,
+  buildRegenerationInstruction,
+  type QualitySignals,
+} from '@/services/outputQualityService'
+
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 const openai = new OpenAI({
@@ -91,6 +97,35 @@ async function complete(
   return response.choices[0].message.content?.trim() ?? ''
 }
 
+// ─── Quality-gated completion ─────────────────────────────────────────────────
+// Runs a completion, checks for generic output, retries once with a forced
+// personalization instruction if the result fails the quality check.
+// Applied to all primary text surfaces: reading, chat, insights, triggers.
+
+async function completeWithQualityCheck(
+  systemPrompt: string,
+  userPrompt: string,
+  model: 'quality' | 'fast',
+  maxTokens: number,
+  temperature: number,
+  signals: QualitySignals,
+): Promise<string> {
+  const result = await complete(systemPrompt, userPrompt, model, maxTokens, temperature)
+
+  if (isGenericOutput(result, signals)) {
+    const forcePersonalization = buildRegenerationInstruction(signals)
+    return complete(
+      `${forcePersonalization}\n\n${systemPrompt}`,
+      userPrompt,
+      model,
+      maxTokens,
+      temperature,
+    )
+  }
+
+  return result
+}
+
 // ─── Reading Services ─────────────────────────────────────────────────────────
 
 /**
@@ -121,15 +156,25 @@ export async function polishReading(
     palmContext: palmFeatures ? buildPalmContext(palmFeatures) : undefined,
   }
 
+  const qualitySignals: QualitySignals = {
+    name:             name ?? null,
+    starSign:         starSign ?? null,
+    corePattern:      null,       // not threaded through polish — identity summary carries it
+    emotionalPattern: null,
+    focusArea:        focusArea,
+    palmFeatures:     palmFeatures ?? null,
+  }
+
   const [teaserText, lockedText] = await Promise.all([
-    complete(
+    completeWithQualityCheck(
       READING_POLISH_SYSTEM_PROMPT,
       buildPolishUserPrompt(polishInput),
       'quality',
       600,
-      0.68
+      0.68,
+      qualitySignals,
     ),
-    complete(
+    completeWithQualityCheck(
       LOCKED_POLISH_SYSTEM_PROMPT,
       buildLockedPolishUserPrompt(
         lockedRaw,
@@ -143,7 +188,8 @@ export async function polishReading(
       ),
       'quality',
       400,
-      0.7
+      0.7,
+      qualitySignals,
     ),
   ])
 
@@ -240,12 +286,40 @@ export async function sendAdvisorMessage(
     max_tokens: 320,
     temperature: 0.78,
     messages,
-    // Prevent runaway responses
     stop: ['\n\n\n'],
   })
 
-  return response.choices[0].message.content?.trim()
+  const result = response.choices[0].message.content?.trim()
     ?? 'Something interrupted the connection. Please try again.'
+
+  // Quality gate — retry once with forced personalization if output is generic
+  const signals: QualitySignals = {
+    name:             ctx.firstName,
+    starSign:         ctx.starSign,
+    corePattern:      ctx.corePattern,
+    emotionalPattern: ctx.emotionalPattern,
+    focusArea:        ctx.focusArea,
+    palmFeatures:     ctx.palmFeatures,
+  }
+
+  if (isGenericOutput(result, signals)) {
+    const forcePersonalization = buildRegenerationInstruction(signals)
+    const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${forcePersonalization}\n\n${systemPrompt}` },
+      ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: newMessage },
+    ]
+    const retry = await openai.chat.completions.create({
+      model: MODELS.fast,
+      max_tokens: 320,
+      temperature: 0.78,
+      messages: retryMessages,
+      stop: ['\n\n\n'],
+    })
+    return retry.choices[0].message.content?.trim() ?? result
+  }
+
+  return result
 }
 
 /**
@@ -356,7 +430,12 @@ export async function generateDailyInsight(
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const dayOfWeek = days[new Date().getDay()]
 
-  return complete(
+  const signals: QualitySignals = {
+    focusArea,
+    palmFeatures: palmFeatures ?? null,
+  }
+
+  return completeWithQualityCheck(
     DAILY_INSIGHT_SYSTEM_PROMPT,
     buildDailyInsightPrompt(
       identitySummary,
@@ -369,7 +448,8 @@ export async function generateDailyInsight(
     ),
     'fast',
     200,
-    0.75
+    0.75,
+    signals,
   )
 }
 
@@ -421,7 +501,15 @@ ${palmLine}
 
 Write the headline and subtext JSON for this trigger.`
 
-  const raw = await complete(TRIGGER_COPY_SYSTEM_PROMPT, userPrompt, 'fast', 120, 0.8)
+  const signals: QualitySignals = {
+    name:         firstName,
+    focusArea:    focusArea,
+    palmFeatures: palmFeatures ?? null,
+  }
+
+  const raw = await completeWithQualityCheck(
+    TRIGGER_COPY_SYSTEM_PROMPT, userPrompt, 'fast', 120, 0.8, signals
+  )
 
   try {
     const clean = raw.replace(/```json|```/g, '').trim()

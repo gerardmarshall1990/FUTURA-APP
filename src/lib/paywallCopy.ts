@@ -1,13 +1,18 @@
 /**
  * paywallCopy.ts
  *
- * State-aware paywall copy engine.
+ * State-aware paywall copy engine — Phase 2 (refined with palm intelligence).
  *
  * Every variant sells withheld personalized insight — not generic feature lists.
  * Copy uses real user context: first name, focus area, emotional pattern,
- * actual withheld content (cut line, insight, pattern signal).
+ * actual withheld content (cut line), and palm reading anchor.
  *
- * No SaaS feature language. No "unlock premium features". No "upgrade your plan".
+ * Tone principles:
+ * - Pattern-driven: reference the actual pattern, not generic "insight"
+ * - Emotionally tense: the user stopped at a meaningful point
+ * - Slight confrontation where appropriate: name what they haven't done yet
+ * - CTA must be curiosity-driven and completion-focused — not feature announcements
+ * - Cut line framing: interruption must feel unresolved, not just paused
  */
 
 export type PaywallSource = 'reading' | 'chat' | 'insight' | 'trigger' | 'default'
@@ -18,13 +23,13 @@ export interface PaywallContext {
   emotionalPattern?: string | null
   cutLine?: string | null
   hoursRemaining?: number | null
+  palmReadingAnchor?: string | null   // From PalmFeatures.reading_anchor — physical grounding
 }
 
 export interface PaywallCopy {
   eyebrow: string
   headline: string
   subtext: string
-  // The withheld content block — rendered blurred in the UI
   withheldLabel?: string
   withheldText?: string
   withheldContinuation?: string
@@ -44,7 +49,7 @@ const FOCUS_LABELS: Record<string, string> = {
 }
 
 function focus(raw: string | null | undefined): string {
-  if (!raw) return 'life'
+  if (!raw) return 'pattern'
   return FOCUS_LABELS[raw] ?? raw.replace(/_/g, ' ')
 }
 
@@ -53,7 +58,7 @@ function subFeatures(focusArea: string | null | undefined): string[] {
   return [
     'Everything in the one-time unlock',
     `Unlimited advisor conversations about your ${f}`,
-    `Daily insights that track your ${f} arc over time`,
+    `Daily insights that track your ${f} arc as it evolves`,
     'Access to all future pattern updates',
   ]
 }
@@ -61,41 +66,51 @@ function subFeatures(focusArea: string | null | undefined): string[] {
 // ─── Copy variants ────────────────────────────────────────────────────────────
 
 export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): PaywallCopy {
-  const { firstName: name, cutLine, hoursRemaining } = ctx
+  const { firstName: name, cutLine, hoursRemaining, palmReadingAnchor } = ctx
   const f = focus(ctx.focusArea)
   const rawFocus = ctx.focusArea ?? 'life_direction'
   const emotional = ctx.emotionalPattern?.replace(/_/g, ' ')
 
+  // Palm line — appended to subtext when anchor is available.
+  // One sentence. Grounds the copy in physical observation without dominating.
+  const palmLine = palmReadingAnchor
+    ? ` Your palm reading was used to generate this — the section you haven't read applies that grounding directly to your ${f}.`
+    : ''
+
   // ── reading ─────────────────────────────────────────────────────────────────
-  // User just read their teaser and hit the blur zone.
-  // Sell: the specific withheld continuation of their reading.
+  // User read the teaser and hit the blur zone.
+  // Sell: the specific withheld continuation. Confront the gap.
 
   if (source === 'reading') {
     const focusSubtext: Record<string, string> = {
       love:
-        `The section you're missing describes exactly what your pattern is doing in your love life right now — and what it predicts is moving toward you in the coming weeks.`,
+        `The teaser described the pattern. The section you stopped at names exactly what it's doing in your love life right now — and whether it moves toward or away from what you want. You haven't read that part.${palmLine}`,
       money:
-        `The section you're missing describes the financial timing window your pattern is approaching and what your decision pattern says to do before it closes.`,
+        `The teaser described the pattern. The section you stopped at names the specific financial timing window your decision pattern is approaching — and what needs to happen before it closes. You haven't read that.${palmLine}`,
       life_direction:
-        `The deeper layer describes the specific shift your pattern is building toward — and whether what you do in the next few days accelerates it or delays it.`,
+        `The teaser described the pattern. The section you stopped at names the specific shift your pattern is building toward — and what you do in the next few days either accelerates it or delays it. You haven't read that.${palmLine}`,
     }
 
+    const urgency = hoursRemaining && hoursRemaining > 0
+      ? `${hoursRemaining}h before this reading is released — not held`
+      : 'Generated specifically for you. Not a template.'
+
     return {
-      eyebrow:    'Your reading continues',
-      headline:   name ? `${name}, your reading doesn't end here` : `Your reading doesn't end here`,
-      subtext:    focusSubtext[rawFocus] ?? focusSubtext.life_direction,
-      withheldLabel:        'Your reading was interrupted here',
+      eyebrow:  'Reading incomplete',
+      headline: name
+        ? `${name}, you stopped at the most important part`
+        : 'You stopped at the most important part',
+      subtext: focusSubtext[rawFocus] ?? focusSubtext.life_direction,
+      withheldLabel:        'The reading breaks here — mid-sentence, deliberately',
       withheldText:         cutLine ?? undefined,
-      withheldContinuation: 'The deeper layer picks up from this exact point.',
-      urgencyLine: hoursRemaining && hoursRemaining > 0
-        ? `This reading is held for you · ${hoursRemaining} hours remaining`
-        : 'This reading was generated specifically for you.',
-      ctaUnlock: 'Continue my reading',
-      ctaSub:    'Continue reading + daily insight',
+      withheldContinuation: 'The line above was left open. What follows names what it was building toward.',
+      urgencyLine:  urgency,
+      ctaUnlock:    'Finish the reading',
+      ctaSub:       'Finish reading + daily insight',
       unlockFeatures: [
         `What your pattern predicts for your ${f} in the coming weeks`,
-        `The specific timing window identified in your reading`,
-        '10 advisor conversations to go deeper on anything your reading surfaces',
+        'The specific timing window your pattern is approaching',
+        '10 advisor conversations to go deeper on anything the reading surfaces',
       ],
       subFeatures: subFeatures(ctx.focusArea),
     }
@@ -103,22 +118,23 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
 
   // ── chat ─────────────────────────────────────────────────────────────────────
   // User was mid-conversation and hit the message limit.
-  // High-intent moment. Sell: continuation of the specific conversation.
+  // High-intent moment. Confront what they haven't asked yet.
 
   if (source === 'chat') {
+    const chatSubtext = emotional
+      ? `You've been asking around the edge of something. The ${emotional} pattern tends to circle before it lands — and the conversation was about to land on it. The next message is where you stop circling.`
+      : `You've been asking around the edge of something. The conversation was about to reach the part that actually matters. That's where you stopped.`
+
     return {
-      eyebrow:  'Conversation limit reached',
+      eyebrow:  'That\'s the limit',
       headline: name
-        ? `${name}, you reached the limit at exactly the right moment`
-        : 'You reached the limit at exactly the right moment',
-      subtext: emotional
-        ? `The questions you've been asking are the kind that reveal ${emotional} patterns most clearly. The conversation was building toward the most important part. Don't stop here.`
-        : `The questions you've been asking are precisely the kind that reveal the deepest patterns. The conversation was building toward the most important part.`,
-      urgencyLine: undefined,
-      ctaUnlock: 'Continue this conversation',
-      ctaSub:    'Unlimited guidance · $9.99/mo',
+        ? `${name}, the next message is the one that matters`
+        : 'The next message is the one that matters',
+      subtext: chatSubtext,
+      ctaUnlock: 'Send the next message',
+      ctaSub:    'Unlimited messages · $9.99/mo',
       unlockFeatures: [
-        '10 advisor conversations to continue and finish what you started',
+        '10 advisor conversations to finish what you started',
         `The deeper reading layer — what your pattern reveals about your ${f}`,
         'Full pattern history tracked across every session',
       ],
@@ -127,20 +143,22 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
   }
 
   // ── insight ───────────────────────────────────────────────────────────────────
-  // Non-subscriber saw the locked insight card and clicked through.
-  // Sell: the specific insight that was generated for them today.
+  // Non-subscriber clicked the locked insight card.
+  // Sell: this specific insight, for today, for this pattern. Not generic.
 
   if (source === 'insight') {
+    const insightSubtext = emotional
+      ? `It's not a reflection of your reading. It's based on your ${emotional} pattern and where your arc currently sits. It names what today is asking of you specifically — not what yesterday asked.`
+      : `Today's insight is based on your behavioral pattern and reading arc. It names what today is asking of you specifically — not what yesterday asked, not what tomorrow will ask.`
+
     return {
-      eyebrow:  "Today's insight is ready",
+      eyebrow:  'Generated today, for today',
       headline: name
-        ? `${name}, a new observation about your pattern was generated today`
-        : 'A new observation about your pattern was generated today',
-      subtext: emotional
-        ? `Based on your ${emotional} tendency and what your reading identified, today's insight describes exactly where you are in your pattern arc right now — and what today is asking of you.`
-        : `Based on your reading and behavioral pattern, today's insight identifies exactly where you are in your arc — and what it means for your ${f} today.`,
-      urgencyLine: `A new insight is generated every day — today's won't wait`,
-      ctaUnlock: "Read today's insight",
+        ? `${name}, today's observation is specific to where you are right now`
+        : 'Today\'s observation is specific to where you are right now',
+      subtext: insightSubtext,
+      urgencyLine: `Today's insight expires at midnight`,
+      ctaUnlock: "Read what today is asking",
       ctaSub:    'Daily insight + unlimited guidance',
       unlockFeatures: [
         `Today's personal insight — written for your ${f} specifically`,
@@ -153,22 +171,24 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
 
   // ── trigger ───────────────────────────────────────────────────────────────────
   // User clicked a FOMO/reactivation lifecycle trigger card.
-  // Sell: the specific pattern signal that generated the trigger.
+  // Sell: the specific shift, and the window attached to it.
 
   if (source === 'trigger') {
+    const triggerSubtext = emotional
+      ? `Your ${emotional} tendency has generated a new configuration. This doesn't happen on a predictable schedule. What it means for your ${f} is specific — there's a window of roughly a week where acting on this actually registers. After that, the pattern resets.`
+      : `Something in your pattern configuration has shifted. There's a window where what you do with this registers. That window is narrow and it's open now.`
+
     return {
-      eyebrow:  'Your pattern moved',
+      eyebrow:  'Pattern signal detected',
       headline: name
-        ? `${name}, something shifted in your ${f} pattern`
-        : `Something shifted in your ${f} pattern`,
-      subtext: emotional
-        ? `Your ${emotional} pattern has generated a new signal. The deeper layer describes what it means for your ${f} right now — and the window it's pointing toward.`
-        : `Based on recent patterns and your reading, a new development in your ${f} has been identified. It's ready when you are.`,
-      urgencyLine: "Pattern windows don't stay open",
-      ctaUnlock: `See what changed in my ${f}`,
+        ? `${name}, there's a shift in your ${f} pattern — and a window`
+        : `There's a shift in your ${f} pattern — and a window`,
+      subtext: triggerSubtext,
+      urgencyLine: 'Pattern windows close. This one is open now.',
+      ctaUnlock: `See the signal and the window`,
       ctaSub:    'Stay ahead of your pattern',
       unlockFeatures: [
-        `What changed in your ${f} pattern`,
+        `What shifted in your ${f} pattern`,
         'Daily insight updates as your pattern continues to evolve',
         'Unlimited advisor conversations to track each development',
       ],
@@ -179,17 +199,23 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
   // ── default ────────────────────────────────────────────────────────────────
   // Direct visit, or from home "Unlock full access" CTA.
 
+  const defaultSubtext = `What you've read is the recognition layer — it named the pattern. The second layer is where the pattern is applied to your ${f} specifically. That's the section that describes what happens next and what it asks of you.${palmLine}`
+
   return {
-    eyebrow:  'There is more to your reading',
-    headline: name ? `${name}, your reading has a deeper layer` : 'Your reading has a deeper layer',
-    subtext:  `The teaser you've read is the surface. The deeper layer describes what your pattern predicts specifically for your ${f} — the timing, the tension, and what it asks of you next.`,
-    withheldLabel:        cutLine ? 'Your reading was interrupted here' : undefined,
+    eyebrow:  'There is a second layer',
+    headline: name
+      ? `${name}, your reading is incomplete`
+      : 'Your reading is incomplete',
+    subtext: defaultSubtext,
+    withheldLabel:        cutLine ? 'The reading cuts here — what follows was withheld' : undefined,
     withheldText:         cutLine ?? undefined,
-    withheldContinuation: cutLine ? 'The deeper layer continues from this exact point.' : undefined,
-    urgencyLine: hoursRemaining && hoursRemaining > 0
-      ? `This reading is held for you · ${hoursRemaining}h remaining`
+    withheldContinuation: cutLine
+      ? 'The next section names the outcome and the timing. That\'s the part you haven\'t read.'
       : undefined,
-    ctaUnlock: 'Unlock my full reading',
+    urgencyLine: hoursRemaining && hoursRemaining > 0
+      ? `${hoursRemaining}h before this reading is released — not held`
+      : undefined,
+    ctaUnlock: 'Read the complete version',
     ctaSub:    'Full reading + ongoing guidance',
     unlockFeatures: [
       'The complete deeper layer of your personal reading',

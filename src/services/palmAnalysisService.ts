@@ -173,5 +173,5 @@ ${features.fate_line ? `- Fate line: ${features.fate_line}` : '- Fate line: not 
 - Dominant mount: ${features.dominant_mount}
 ${structuredLines.length > 0 ? `\nNormalized signals:\n${structuredLines.join('\n')}` : ''}
 
-WEIGHTING INSTRUCTION: Treat palm features as a primary identity anchor — equivalent in weight to the user's core behavioral pattern and emotional tendency. Use palm observations to reinforce and ground psychological interpretations, not to decorate them.`
+WEIGHTING INSTRUCTION: Treat palm features as a primary identity anchor — equivalent in weight to the user's core behavioral pattern and emotional tendency. Use palm observations to reinforce and ground psychological interpretations, not to decorate them. When making a palm reference, use the reading_anchor above as the primary synthesis point — it is the most specific physical summary of this person's palm available.`
 }
