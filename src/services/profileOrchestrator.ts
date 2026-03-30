@@ -1,14 +1,18 @@
 /**
  * profileOrchestrator.ts
  *
- * The Profile Orchestrator — assembles the complete user context
- * from database profile + persistent memories for prompt injection.
- * Every AI call goes through this to get the full picture.
+ * Single source of truth for all user context.
+ * Every AI call — chat, insights, triggers — must go through here.
+ *
+ * assembleUserContext()   → fetches and assembles FullUserContext
+ * assemblePromptContext() → renders FullUserContext into a prompt-injectable string
  */
 
 import { createClient } from '@supabase/supabase-js'
 import { getMemorySnapshot, buildMemoryContext, type MemorySnapshot } from './memoryService'
 import { buildBeliefTone } from './profileNormalizationService'
+import { getUserLifecycleState, type LifecycleState } from './lifecycleEngine'
+import { buildPalmContext, type PalmFeatures } from './palmAnalysisService'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -19,29 +23,46 @@ const supabaseAdmin = createClient(
 
 export interface FullUserContext {
   userId: string
+
+  // Identity
   firstName: string | null
   starSign: string | null
   lifePathNumber: number | null
   beliefSystem: string | null
   beliefTone: string
+  ageBand: string
+
+  // Behavioral profile
   focusArea: string
   currentState: string
   personalityTrait: string
-  ageBand: string
   corePattern: string
   emotionalPattern: string
   decisionPattern: string
   futureTheme: string
   identitySummary: string
+
+  // Palm
+  palmFeatures: PalmFeatures | null
+
+  // Memory
   memorySnapshot: MemorySnapshot
   memoryContext: string
+
+  // Reading
   teaserText: string | null
   lockedText: string | null
+
+  // Access
   isUnlocked: boolean
   isSubscribed: boolean
+  remainingMessages: number
+
+  // Lifecycle
+  lifecycleState: LifecycleState
 }
 
-// ─── Main Orchestration ──────────────────────────────────────────────────────
+// ─── Assemble Full Context ────────────────────────────────────────────────────
 
 export async function assembleUserContext(userId: string): Promise<FullUserContext | null> {
   const [
@@ -49,9 +70,14 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     { data: user },
     { data: reading },
     memorySnapshot,
+    lifecycleState,
   ] = await Promise.all([
     supabaseAdmin.from('user_profiles').select('*').eq('user_id', userId).single(),
-    supabaseAdmin.from('users').select('unlock_status, subscription_status').eq('id', userId).single(),
+    supabaseAdmin
+      .from('users')
+      .select('unlock_status, subscription_status, remaining_chat_messages')
+      .eq('id', userId)
+      .single(),
     supabaseAdmin
       .from('readings')
       .select('teaser_text, locked_text')
@@ -60,12 +86,14 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
       .limit(1)
       .single(),
     getMemorySnapshot(userId),
+    getUserLifecycleState(userId),
   ])
 
   if (!profile) return null
 
   const isSubscribed = user?.subscription_status === 'active'
   const isUnlocked = user?.unlock_status || isSubscribed
+  const remainingMessages = isSubscribed ? 999 : (user?.remaining_chat_messages ?? 0)
 
   return {
     userId,
@@ -74,53 +102,71 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     lifePathNumber: profile.life_path_number ?? null,
     beliefSystem: profile.belief_system ?? null,
     beliefTone: buildBeliefTone(profile.belief_system ?? undefined),
+    ageBand: profile.age_band,
     focusArea: profile.focus_area,
     currentState: profile.current_state,
     personalityTrait: profile.personality_trait,
-    ageBand: profile.age_band,
     corePattern: profile.core_pattern,
     emotionalPattern: profile.emotional_pattern,
     decisionPattern: profile.decision_pattern,
     futureTheme: profile.future_theme,
     identitySummary: profile.identity_summary,
+    palmFeatures: profile.palm_features_json ?? null,
     memorySnapshot,
     memoryContext: buildMemoryContext(memorySnapshot),
     teaserText: reading?.teaser_text ?? null,
     lockedText: isUnlocked ? (reading?.locked_text ?? null) : null,
     isUnlocked,
     isSubscribed,
+    remainingMessages,
+    lifecycleState,
   }
 }
 
-// ─── Prompt Assembly ─────────────────────────────────────────────────────────
+// ─── Unified Prompt Context String ───────────────────────────────────────────
+// This is what gets injected into every AI call.
+// No AI call should build its own context — it must use this.
 
 export function assemblePromptContext(ctx: FullUserContext): string {
-  const lines = [
+  const lines: (string | null)[] = [
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-    `USER CONTEXT (assembled by Profile Orchestrator)`,
+    `IDENTITY`,
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    ctx.firstName        ? `Name: ${ctx.firstName}`                              : null,
+    ctx.starSign         ? `Star sign: ${ctx.starSign}`                          : null,
+    ctx.lifePathNumber   ? `Life path number: ${ctx.lifePathNumber}`             : null,
+    ctx.beliefSystem     ? `Belief system: ${ctx.beliefSystem}`                  : null,
+    `Age band: ${ctx.ageBand}`,
+    `Focus area: ${ctx.focusArea.replace(/_/g, ' ')}`,
+    `Current state: ${ctx.currentState.replace(/_/g, ' ')}`,
+    `Core behavioral pattern: ${ctx.corePattern}`,
+    `Emotional tendency: ${ctx.emotionalPattern}`,
+    `Decision pattern: ${ctx.decisionPattern}`,
+    `Current movement arc: ${ctx.futureTheme}`,
     ``,
-    ctx.firstName ? `Name: ${ctx.firstName}` : null,
-    ctx.starSign ? `Star Sign: ${ctx.starSign}` : null,
-    ctx.lifePathNumber ? `Life Path Number: ${ctx.lifePathNumber}` : null,
-    ctx.beliefSystem ? `Belief System: ${ctx.beliefSystem}` : null,
-    `Focus: ${ctx.focusArea.replace('_', ' ')}`,
-    `Current State: ${ctx.currentState.replace(/_/g, ' ')}`,
-    `Core Pattern: ${ctx.corePattern}`,
-    `Emotional Pattern: ${ctx.emotionalPattern}`,
-    `Decision Pattern: ${ctx.decisionPattern}`,
-    `Future Theme: ${ctx.futureTheme}`,
-    ``,
-    `Identity Summary:`,
+    `Identity summary:`,
     ctx.identitySummary,
     ``,
     `LANGUAGE TONE:`,
     ctx.beliefTone,
-  ].filter(Boolean).join('\n')
+  ]
 
-  if (ctx.memoryContext) {
-    return `${lines}\n\n${ctx.memoryContext}`
+  const sections: string[] = [lines.filter(Boolean).join('\n')]
+
+  // Palm anchor — physical identity layer
+  if (ctx.palmFeatures) {
+    sections.push(buildPalmContext(ctx.palmFeatures))
   }
 
-  return lines
+  // Persistent memory — behavioral history
+  if (ctx.memoryContext) {
+    sections.push(ctx.memoryContext)
+  }
+
+  // Lifecycle — where they are in the product journey
+  sections.push(
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nLIFECYCLE STATE: ${ctx.lifecycleState.replace(/_/g, ' ')}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  )
+
+  return sections.join('\n\n')
 }

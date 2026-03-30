@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPendingTriggers, generateLifecycleTriggers, markTriggerSent } from '@/services/lifecycleEngine'
+import { assembleUserContext } from '@/services/profileOrchestrator'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,9 +11,12 @@ export async function GET(req: NextRequest) {
 
     let triggers = await getPendingTriggers(userId)
 
-    // If no pending triggers, generate new ones
     if (triggers.length === 0) {
-      triggers = await generateLifecycleTriggers(userId)
+      // Need full context to generate personalized triggers
+      const ctx = await assembleUserContext(userId)
+      if (ctx) {
+        triggers = await generateLifecycleTriggers(ctx)
+      }
     }
 
     return NextResponse.json({ triggers })
@@ -28,7 +32,6 @@ export async function POST(req: NextRequest) {
     if (!triggerId) {
       return NextResponse.json({ error: 'triggerId required' }, { status: 400 })
     }
-
     await markTriggerSent(triggerId)
     return NextResponse.json({ success: true })
   } catch (err) {

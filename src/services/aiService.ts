@@ -33,10 +33,11 @@ import {
   buildAdvisorOpeningMessage,
   INTENT_CLASSIFICATION_PROMPT,
   buildIntentClassificationPrompt,
-  type AdvisorSystemPromptInput,
 } from '@/lib/prompts/advisorPrompt'
 
-import { buildPalmContext, type PalmFeatures } from '@/services/palmAnalysisService'
+import type { FullUserContext } from '@/services/profileOrchestrator'
+import type { PalmFeatures } from '@/services/palmAnalysisService'
+import { buildPalmContext } from '@/services/palmAnalysisService'
 
 import {
   IDENTITY_SUMMARY_SYSTEM_PROMPT,
@@ -213,12 +214,11 @@ export interface ChatMessage {
  * History is passed in and managed by caller.
  */
 export async function sendAdvisorMessage(
-  ctx: AdvisorSystemPromptInput,
+  ctx: FullUserContext,
   history: ChatMessage[],
   newMessage: string,
-  palmFeatures?: PalmFeatures | null,
 ): Promise<string> {
-  const systemPrompt = buildAdvisorSystemPrompt(ctx, palmFeatures ?? null)
+  const systemPrompt = buildAdvisorSystemPrompt(ctx)
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -243,7 +243,7 @@ export async function sendAdvisorMessage(
  * Returns the opening message the advisor sends at the start of a session.
  * This is deterministic (no API call) but uses the advisor prompt system.
  */
-export function getAdvisorOpeningMessage(ctx: AdvisorSystemPromptInput): string {
+export function getAdvisorOpeningMessage(ctx: FullUserContext): string {
   return buildAdvisorOpeningMessage(ctx)
 }
 
