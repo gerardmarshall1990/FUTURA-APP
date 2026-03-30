@@ -18,6 +18,7 @@
 
 import type { FocusArea } from '@/services/profileNormalizationService'
 import { buildBeliefTone } from '@/services/profileNormalizationService'
+import { buildPalmContext, type PalmFeatures } from '@/services/palmAnalysisService'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ As they continue asking questions, you may begin to synthesize patterns across t
 
 // ─── Main system prompt builder ───────────────────────────────────────────────
 
-export function buildAdvisorSystemPrompt(input: AdvisorSystemPromptInput): string {
+export function buildAdvisorSystemPrompt(input: AdvisorSystemPromptInput, palmFeatures?: PalmFeatures | null): string {
   const accessLevel = input.isSubscribed ? 'subscribed' : input.isUnlocked ? 'unlocked' : 'free'
   const patternBehavior = patternBehaviors[input.corePattern] ?? patternBehaviors.mental_overprocessing
 
@@ -107,7 +108,9 @@ THEIR FOCUS AREA
 
 ${focusFraming[input.focusArea]}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${palmFeatures ? `${buildPalmContext(palmFeatures)}
+
+` : ''}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 THEIR READING (your context)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

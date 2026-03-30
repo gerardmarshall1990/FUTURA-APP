@@ -48,7 +48,11 @@ export async function POST(req: NextRequest) {
       composed.cutLine,
       profile.identity_summary,
       profile.focus_area,
-      profile.future_theme
+      profile.future_theme,
+      profile.palm_features_json ?? null,
+      profile.first_name ?? null,
+      profile.belief_system ?? null,
+      profile.star_sign ?? null,
     )
 
     const fullText = [polished.teaserText, polished.cutLine, polished.lockedText]

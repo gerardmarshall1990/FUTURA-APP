@@ -318,19 +318,55 @@ function BeliefScreen({ onNext }: { onNext: () => void }) {
 
 // ─── Palm Upload Screen ───────────────────────────────────────────────────────
 
+type PalmStatus = 'idle' | 'uploading' | 'analyzing' | 'done' | 'error'
+
 function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumber: number }) {
   const { setPalmImage, palmPreviewUrl } = useOnboardingStore()
+  const { userId } = useSessionStore()
   const fileRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [status, setStatus] = useState<PalmStatus>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [palmFile, setPalmFile] = useState<File | null>(null)
+
+  const statusLabels: Record<PalmStatus, string> = {
+    idle: 'Tap to upload · or drag & drop',
+    uploading: 'Uploading...',
+    analyzing: 'Reading your palm lines...',
+    done: '✓ Palm analyzed',
+    error: errorMsg || 'Try again with a clearer image',
+  }
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return
-    setUploading(true)
+    setPalmFile(file)
+    setStatus('uploading')
+    setErrorMsg('')
+
+    // Show local preview immediately
     const preview = URL.createObjectURL(file)
     setPalmImage(preview, preview)
-    setTimeout(() => { setUploading(false) }, 800)
-  }, [setPalmImage])
+
+    setStatus('analyzing')
+    try {
+      const fd = new FormData()
+      fd.append('palm', file)
+      fd.append('userId', userId ?? '')
+
+      const res = await fetch('/api/palm/analyze', { method: 'POST', body: fd })
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: 'Analysis failed' }))
+        throw new Error(error)
+      }
+      const { publicUrl } = await res.json()
+      // Update store with the permanent public URL
+      setPalmImage(publicUrl, preview)
+      setStatus('done')
+    } catch (err) {
+      setErrorMsg((err as Error).message ?? 'Analysis failed')
+      setStatus('error')
+    }
+  }, [setPalmImage, userId])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -338,6 +374,9 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
     const file = e.dataTransfer.files[0]
     if (file) handleFile(file)
   }
+
+  const isAnalyzing = status === 'uploading' || status === 'analyzing'
+  const canContinue = status === 'done'
 
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem', paddingTop: '1rem' }}>
@@ -347,28 +386,36 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
           Scan your palm
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.65 }}>
-          Hold your dominant hand open, palm facing the camera. This helps personalize your insight.
+          Hold your dominant hand flat, palm facing the camera in good light. Your palm lines are the anchor of your reading.
         </p>
       </div>
 
+      {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
+        onClick={() => !isAnalyzing && fileRef.current?.click()}
         style={{
           flex: 1, minHeight: 240,
-          border: `1px dashed ${dragging ? 'var(--gold)' : palmPreviewUrl ? 'rgba(201,169,110,0.3)' : 'var(--border)'}`,
-          borderRadius: 'var(--radius-lg)', background: dragging ? 'var(--gold-glow)' : 'var(--bg-card)',
+          border: `1px dashed ${dragging ? 'var(--gold)' : canContinue ? 'rgba(201,169,110,0.4)' : status === 'error' ? 'rgba(255,80,80,0.3)' : 'var(--border)'}`,
+          borderRadius: 'var(--radius-lg)',
+          background: dragging ? 'var(--gold-glow)' : 'var(--bg-card)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', transition: 'all 0.2s ease', overflow: 'hidden', position: 'relative',
+          cursor: isAnalyzing ? 'wait' : 'pointer',
+          transition: 'all 0.2s ease', overflow: 'hidden', position: 'relative',
         }}
       >
         {palmPreviewUrl ? (
           <>
-            <img src={palmPreviewUrl} alt="Palm" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: 0.6 }} />
-            <div style={{ position: 'relative', zIndex: 1, background: 'rgba(9,9,11,0.7)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', backdropFilter: 'blur(8px)' }}>
-              <span style={{ color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: '0.06em' }}>✓ Image captured</span>
+            <img src={palmPreviewUrl} alt="Palm" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: isAnalyzing ? 0.35 : 0.55 }} />
+            <div style={{ position: 'relative', zIndex: 1, background: 'rgba(9,9,11,0.75)', padding: '0.5rem 1.2rem', borderRadius: 'var(--radius-full)', backdropFilter: 'blur(8px)' }}>
+              <span style={{
+                color: status === 'error' ? '#ff6060' : 'var(--gold)',
+                fontSize: '0.8rem', letterSpacing: '0.06em',
+              }}>
+                {statusLabels[status]}
+              </span>
             </div>
           </>
         ) : (
@@ -377,21 +424,47 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
               <Orb size={64} intensity={1.5} animated={false} />
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', letterSpacing: '0.04em' }}>
-              {uploading ? 'Processing...' : 'Tap to upload · or drag & drop'}
+              {statusLabels[status]}
             </p>
           </>
         )}
-        <input ref={fileRef} type="file" accept="image/*" capture="user" style={{ display: 'none' }}
+
+        {/* Analysis progress ring */}
+        {isAnalyzing && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 2,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              border: '2px solid rgba(201,169,110,0.15)',
+              borderTopColor: 'var(--gold)',
+              animation: 'rotate-slow 1s linear infinite',
+            }} />
+          </div>
+        )}
+
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
       </div>
 
-      <PremiumButton onClick={onNext} disabled={!palmPreviewUrl} size="lg">
-        {palmPreviewUrl ? 'Continue' : 'Upload your palm to continue'}
+      {/* Retry on error */}
+      {status === 'error' && (
+        <button
+          onClick={() => { setStatus('idle'); setPalmFile(null) }}
+          style={{ background: 'none', border: '1px solid rgba(255,100,100,0.25)', borderRadius: '8px', color: 'rgba(255,120,120,0.7)', fontSize: '0.75rem', padding: '0.5rem 1rem', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+        >
+          Try a different image
+        </button>
+      )}
+
+      <PremiumButton onClick={onNext} disabled={!canContinue} loading={isAnalyzing} size="lg">
+        {canContinue ? 'Continue' : isAnalyzing ? 'Analyzing your palm...' : 'Upload your palm to continue'}
       </PremiumButton>
 
-      <button onClick={onNext} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.78rem', letterSpacing: '0.04em', fontFamily: 'var(--font-body)', marginTop: '-1rem', textDecoration: 'underline', textDecorationColor: 'var(--text-muted)' }}>
-        Skip for now
-      </button>
+      <p style={{ textAlign: 'center', fontSize: '0.68rem', color: 'rgba(240,235,225,0.2)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>
+        Your palm is the foundation of your reading — it cannot be skipped
+      </p>
     </div>
   )
 }

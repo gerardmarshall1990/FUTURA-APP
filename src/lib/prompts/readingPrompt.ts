@@ -42,6 +42,7 @@ export interface PolishPromptInput {
   name?: string
   beliefSystem?: string
   starSign?: string
+  palmContext?: string
 }
 
 // ─── System Prompts ───────────────────────────────────────────────────────────
@@ -186,11 +187,12 @@ ${input.identitySummary}
 
 ${personalContext ? `PERSONAL CONTEXT:\n${personalContext}\n` : ''}FOCUS AREA: ${input.focusArea.replace('_', ' ')}
 
-RAW READING:
+${input.palmContext ? `${input.palmContext}\n` : ''}RAW READING:
 ${input.teaserRaw}
 
 ${input.name ? `Use the name "${input.name}" once naturally in the reading — not as the first word, but placed where it feels personal and direct.` : ''}
 ${input.beliefSystem ? `Adapt the language tone to resonate with their ${input.beliefSystem} worldview without being heavy-handed.` : ''}
+${input.palmContext ? `Reference specific palm features (heart line, head line, hand shape, etc.) where they genuinely connect to the reading content. Do not force palm references — use them where they add precision.` : ''}
 
 Polish this now. Return only the polished paragraphs.`
 }
@@ -199,7 +201,8 @@ export function buildLockedPolishUserPrompt(
   lockedRaw: string,
   identitySummary: string,
   focusArea: FocusArea,
-  futureTheme: string
+  futureTheme: string,
+  palmContext?: string,
 ): string {
   return `Here is the locked deeper continuation to polish.
 
@@ -208,8 +211,11 @@ Identity: ${identitySummary}
 Focus: ${focusArea.replace('_', ' ')}
 Current movement: ${futureTheme}
 
-RAW LOCKED CONTINUATION:
+${palmContext ? `${palmContext}\n` : ''}RAW LOCKED CONTINUATION:
 ${lockedRaw}
+
+${palmContext ? `You may reference specific palm features once to anchor the deeper layer — e.g. what a particular line suggests about what is building.` : ''}
 
 Polish this into the deeper layer. Return only the polished paragraphs.`
 }
+

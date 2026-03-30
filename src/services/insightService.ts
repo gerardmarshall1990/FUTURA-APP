@@ -72,12 +72,20 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
     description: m.value,
   }))
 
+  // Get palm features from profile
+  const { data: profile } = await supabaseAdmin
+    .from('user_profiles')
+    .select('palm_features_json')
+    .eq('user_id', userId)
+    .single()
+
   const insightText = await generateDailyInsight(
     ctx.identitySummary,
     ctx.futureTheme,
     ctx.focusArea as FocusArea,
     memoryThemes,
     daysSinceReading,
+    profile?.palm_features_json ?? null,
   )
 
   const today = new Date().toISOString().split('T')[0]

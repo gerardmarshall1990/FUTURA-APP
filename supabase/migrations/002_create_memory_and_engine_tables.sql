@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS lifecycle_triggers (
 
 CREATE INDEX IF NOT EXISTS idx_lifecycle_triggers_user ON lifecycle_triggers(user_id, is_sent);
 
+-- ─── Palm Storage Bucket ─────────────────────────────────────────────────────
+-- Create this via Supabase dashboard: Storage > New Bucket > "user-palms" > Public
+-- Or via SQL:
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('user-palms', 'user-palms', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- ─── RLS Policies ────────────────────────────────────────────────────────────
 ALTER TABLE user_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_insights ENABLE ROW LEVEL SECURITY;

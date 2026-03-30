@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       content: m.content,
     }))
 
-    const response = await sendAdvisorMessage(advisorCtx, history, message)
+    const response = await sendAdvisorMessage(advisorCtx, history, message, profile.palm_features_json ?? null)
 
     let activeSessionId = sessionId
     if (!activeSessionId) {

@@ -36,6 +36,8 @@ import {
   type AdvisorSystemPromptInput,
 } from '@/lib/prompts/advisorPrompt'
 
+import { buildPalmContext, type PalmFeatures } from '@/services/palmAnalysisService'
+
 import {
   IDENTITY_SUMMARY_SYSTEM_PROMPT,
   buildIdentitySummaryPrompt,
@@ -100,7 +102,11 @@ export async function polishReading(
   cutLine: string,
   identitySummary: string,
   focusArea: FocusArea,
-  futureTheme: string
+  futureTheme: string,
+  palmFeatures?: PalmFeatures | null,
+  name?: string | null,
+  beliefSystem?: string | null,
+  starSign?: string | null,
 ): Promise<{ teaserText: string; cutLine: string; lockedText: string }> {
   const polishInput: PolishPromptInput = {
     teaserRaw,
@@ -108,6 +114,10 @@ export async function polishReading(
     lockedRaw,
     identitySummary,
     focusArea,
+    name: name ?? undefined,
+    beliefSystem: beliefSystem ?? undefined,
+    starSign: starSign ?? undefined,
+    palmContext: palmFeatures ? buildPalmContext(palmFeatures) : undefined,
   }
 
   const [teaserText, lockedText] = await Promise.all([
@@ -120,7 +130,7 @@ export async function polishReading(
     ),
     complete(
       LOCKED_POLISH_SYSTEM_PROMPT,
-      buildLockedPolishUserPrompt(lockedRaw, identitySummary, focusArea, futureTheme),
+      buildLockedPolishUserPrompt(lockedRaw, identitySummary, focusArea, futureTheme, palmFeatures ? buildPalmContext(palmFeatures) : undefined),
       'quality',
       400,
       0.7
@@ -205,9 +215,10 @@ export interface ChatMessage {
 export async function sendAdvisorMessage(
   ctx: AdvisorSystemPromptInput,
   history: ChatMessage[],
-  newMessage: string
+  newMessage: string,
+  palmFeatures?: PalmFeatures | null,
 ): Promise<string> {
-  const systemPrompt = buildAdvisorSystemPrompt(ctx)
+  const systemPrompt = buildAdvisorSystemPrompt(ctx, palmFeatures ?? null)
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -317,7 +328,8 @@ export async function generateDailyInsight(
   futureTheme: string,
   focusArea: FocusArea,
   memoryThemes: MemoryTheme[],
-  daysSinceReading: number
+  daysSinceReading: number,
+  palmFeatures?: PalmFeatures | null,
 ): Promise<string> {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const dayOfWeek = days[new Date().getDay()]
@@ -330,7 +342,8 @@ export async function generateDailyInsight(
       focusArea,
       memoryThemes,
       dayOfWeek,
-      daysSinceReading
+      daysSinceReading,
+      palmFeatures ? buildPalmContext(palmFeatures) : undefined,
     ),
     'fast',
     200,

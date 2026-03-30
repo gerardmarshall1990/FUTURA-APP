@@ -121,7 +121,8 @@ export function buildDailyInsightPrompt(
   focusArea: FocusArea,
   memoryThemes: Array<{ key_theme: string; description: string }>,
   dayOfWeek: string,
-  daysSinceReading: number
+  daysSinceReading: number,
+  palmContext?: string,
 ): string {
   const themeContext = memoryThemes.length > 0
     ? memoryThemes.map(t => `- ${t.key_theme}: ${t.description}`).join('\n')
@@ -138,9 +139,9 @@ FOCUS AREA: ${focusArea.replace('_', ' ')}
 BEHAVIORAL THEMES FROM THEIR HISTORY:
 ${themeContext}
 
-CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
+${palmContext ? `${palmContext}\n` : ''}CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
 
-Generate one daily insight for today.`
+Generate one daily insight for today. If palm features are provided, you may ground one observation in a specific palm feature — briefly and precisely.`
 }
 
 // ─── Reading Variation Prompt (A/B Testing) ───────────────────────────────────
