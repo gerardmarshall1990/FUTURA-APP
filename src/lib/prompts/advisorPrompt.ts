@@ -8,6 +8,7 @@
 
 import type { FocusArea } from '@/services/profileNormalizationService'
 import { assemblePromptContext, type FullUserContext } from '@/services/profileOrchestrator'
+import { buildEscalationGuidance, type EscalationTier } from '@/services/chatEscalationService'
 
 // ─── Pattern behavior guidance ────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ const paywallGuidance: Record<string, string> = {
 
 // ─── Main prompt builder — uses unified context ───────────────────────────────
 
-export function buildAdvisorSystemPrompt(ctx: FullUserContext): string {
+export function buildAdvisorSystemPrompt(ctx: FullUserContext, escalationTier: EscalationTier = 1): string {
   const accessLevel = ctx.isSubscribed ? 'subscribed' : ctx.isUnlocked ? 'unlocked' : 'free'
   const patternBehavior = patternBehaviors[ctx.corePattern] ?? patternBehaviors.mental_overprocessing
   const focusGuide = focusFraming[ctx.focusArea] ?? focusFraming.life_direction
@@ -95,6 +96,8 @@ WHAT TO DO:
 - Reference the specific pattern behavior
 - Note what their pattern typically does in this situation
 - Offer a precise reframe that connects to their identity summary
+
+${buildEscalationGuidance(escalationTier)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PALM FEATURE GUIDANCE

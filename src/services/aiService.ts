@@ -35,6 +35,12 @@ import {
   buildIntentClassificationPrompt,
 } from '@/lib/prompts/advisorPrompt'
 
+import {
+  detectInSessionLooping,
+  countCrossDomainResonance,
+  calculateEscalationTier,
+} from '@/services/chatEscalationService'
+
 import type { FullUserContext } from '@/services/profileOrchestrator'
 import type { PalmFeatures } from '@/services/palmAnalysisService'
 import { buildPalmContext } from '@/services/palmAnalysisService'
@@ -275,7 +281,15 @@ export async function sendAdvisorMessage(
   history: ChatMessage[],
   newMessage: string,
 ): Promise<string> {
-  const systemPrompt = buildAdvisorSystemPrompt(ctx)
+  // ── Escalation tier — derived from session history + cross-session memory ──
+  const escalationTier = calculateEscalationTier({
+    sessionMessageCount:       history.length,
+    crossDomainResonanceCount: countCrossDomainResonance(ctx.memorySnapshot),
+    inSessionLooping:          detectInSessionLooping(history),
+    lifecycleState:            ctx.lifecycleState,
+  })
+
+  const systemPrompt = buildAdvisorSystemPrompt(ctx, escalationTier)
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
