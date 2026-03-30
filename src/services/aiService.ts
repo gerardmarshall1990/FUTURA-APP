@@ -350,3 +350,60 @@ export async function generateDailyInsight(
     0.75
   )
 }
+
+// ─── Lifecycle Trigger Copy ───────────────────────────────────────────────────
+
+export interface TriggerCopy {
+  headline: string
+  subtext: string
+}
+
+const TRIGGER_COPY_SYSTEM_PROMPT = `You are writing personalized re-engagement copy for a palmistry and pattern advisor app called Futura.
+
+You will receive a user's profile and a trigger type. Write ONE headline and ONE subtext line.
+
+Rules:
+- Headline: max 10 words. Specific. References something real about this person.
+- Subtext: max 20 words. Explains what they're missing or what has shifted. Specific to their focus and emotional pattern.
+- Never generic. Never "your journey". Never "the universe". Never motivational.
+- Never "Something shifted" alone — always complete it: "Something shifted in your [specific pattern]"
+- Tone: direct, personal, slightly urgent. Like a trusted advisor leaving a note.
+- Return valid JSON only: {"headline": "...", "subtext": "..."}`
+
+export async function generateTriggerCopy(
+  triggerType: string,
+  firstName: string | null,
+  focusArea: string,
+  emotionalPattern: string,
+  memoryKeys: string[],
+  starSign: string | null,
+): Promise<TriggerCopy> {
+  const name = firstName ?? 'You'
+  const focus = focusArea.replace(/_/g, ' ')
+  const recentMemory = memoryKeys.slice(0, 3).map(k => k.replace(/_/g, ' ')).join(', ')
+
+  const userPrompt = `Trigger type: ${triggerType}
+Name: ${name}
+Focus area: ${focus}
+Emotional pattern: ${emotionalPattern}
+${starSign ? `Star sign: ${starSign}` : ''}
+${recentMemory ? `Recent behavioral themes: ${recentMemory}` : ''}
+
+Write the headline and subtext JSON for this trigger.`
+
+  const raw = await complete(TRIGGER_COPY_SYSTEM_PROMPT, userPrompt, 'fast', 120, 0.8)
+
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean) as TriggerCopy
+    if (parsed.headline && parsed.subtext) return parsed
+  } catch {
+    // fall through to fallback
+  }
+
+  // Fallback — still uses user data, just templated
+  return {
+    headline: `${name}, your ${focus} pattern has moved.`,
+    subtext: `A new insight based on your ${emotionalPattern} is ready.`,
+  }
+}
