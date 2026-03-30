@@ -399,10 +399,17 @@ export async function generateTriggerCopy(
   emotionalPattern: string,
   memoryKeys: string[],
   starSign: string | null,
+  palmFeatures?: PalmFeatures | null,
 ): Promise<TriggerCopy> {
   const name = firstName ?? 'You'
   const focus = focusArea.replace(/_/g, ' ')
   const recentMemory = memoryKeys.slice(0, 3).map(k => k.replace(/_/g, ' ')).join(', ')
+
+  // Include palm reading anchor if available — gives the AI a grounded physical signal
+  // to reference in trigger copy without forcing it to re-derive from raw feature text
+  const palmLine = palmFeatures?.reading_anchor
+    ? `Palm reading anchor: ${palmFeatures.reading_anchor}`
+    : ''
 
   const userPrompt = `Trigger type: ${triggerType}
 Name: ${name}
@@ -410,6 +417,7 @@ Focus area: ${focus}
 Emotional pattern: ${emotionalPattern}
 ${starSign ? `Star sign: ${starSign}` : ''}
 ${recentMemory ? `Recent behavioral themes: ${recentMemory}` : ''}
+${palmLine}
 
 Write the headline and subtext JSON for this trigger.`
 

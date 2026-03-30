@@ -97,6 +97,14 @@ WHAT TO DO:
 - Tighten language — cut filler words ruthlessly
 - Preserve the emotional arc: recognition → validation → present tension → future pressure
 
+PALM FEATURES (if provided):
+- Palm features are a primary identity anchor — treat them with equal weight to behavioral patterns
+- Reference specific palm observations where they genuinely reinforce reading content (e.g. "The way your head line moves..." or "Your heart line depth suggests...")
+- ONE palm reference maximum per reading — use it where it adds the most precision, not decoratively
+- Use probabilistic language: "tends to...", "often correlates with...", "this tends to show up as..."
+- NEVER say "your palm says" or "your palm means" — use "the depth of your heart line tends to..." style
+- If there is any tension between a palm observation and what the reading already states: "this can show up differently depending on your current phase"
+
 WHAT NOT TO DO:
 - Do not change the meaning of any paragraph
 - Do not add new claims or content not in the original
@@ -120,6 +128,12 @@ WHAT TO DO:
 - Include a sense of timing or window ("this next period", "the coming weeks", "what you do next")
 - End with one line that creates forward motion — not a motivational quote, but a precise observation about what the user's pattern predicts they will or should do
 - Keep it 2–3 tight paragraphs maximum
+
+PALM FEATURES (if provided):
+- You may reference ONE specific palm feature once to anchor the deeper layer — this is the section where a well-placed palm reference has the most impact
+- Use it to ground a timing or behavioral prediction: e.g. "The way your life line holds its arc through this section tends to correlate with..."
+- Use probabilistic language only — "tends to...", "often shows up as..."
+- If palm and behavioral pattern appear to tension: "this can show up differently depending on your current phase"
 
 WHAT NOT TO DO:
 - Do not repeat what the teaser already said

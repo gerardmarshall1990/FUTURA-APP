@@ -118,6 +118,13 @@ A daily insight is:
 
 The insight should feel like something a trusted advisor who knows you well would say on a Tuesday morning — grounded, specific, and worth pausing on.
 
+PALM FEATURES (if provided):
+- Lightly ground one observation in a specific palm feature — briefly and precisely
+- Do this in roughly 1 in 3 insights maximum — not every day
+- Use probabilistic language: "tends to...", "often shows up as..."
+- Example: "The depth of your heart line tends to make this kind of day harder to move through cleanly — the emotional weight is real, not resistance."
+- If what the user has shared recently contrasts with the palm signal: "this can show up differently depending on your current phase"
+
 Output only the insight text. Nothing else.`
 
 export function buildDailyInsightPrompt(

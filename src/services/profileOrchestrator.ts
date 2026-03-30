@@ -13,6 +13,7 @@ import { getMemorySnapshot, buildMemoryContext, type MemorySnapshot } from './me
 import { buildBeliefTone } from './profileNormalizationService'
 import { getUserLifecycleState, type LifecycleState } from './lifecycleEngine'
 import { buildPalmContext, type PalmFeatures } from './palmAnalysisService'
+import { interpretPalmFeatures, buildPalmTraitContext, type PalmTraits } from './palmInterpretationService'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -42,8 +43,9 @@ export interface FullUserContext {
   futureTheme: string
   identitySummary: string
 
-  // Palm
+  // Palm — raw features + derived behavioral signals
   palmFeatures: PalmFeatures | null
+  palmTraits: PalmTraits | null    // Interpreted from structured signals; null if no structured data
 
   // Memory
   memorySnapshot: MemorySnapshot
@@ -112,6 +114,9 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     futureTheme: profile.future_theme,
     identitySummary: profile.identity_summary,
     palmFeatures: profile.palm_features_json ?? null,
+    palmTraits: profile.palm_features_json
+      ? interpretPalmFeatures(profile.palm_features_json)
+      : null,
     memorySnapshot,
     memoryContext: buildMemoryContext(memorySnapshot),
     teaserText: reading?.teaser_text ?? null,
@@ -153,12 +158,20 @@ export function assemblePromptContext(ctx: FullUserContext): string {
 
   const sections: string[] = [lines.filter(Boolean).join('\n')]
 
-  // Palm anchor — physical identity layer
+  // Palm — raw observed features (physical identity layer)
+  // Positioned immediately after identity so all downstream context inherits it
   if (ctx.palmFeatures) {
     sections.push(buildPalmContext(ctx.palmFeatures))
   }
 
-  // Persistent memory — behavioral history
+  // Palm — interpreted behavioral signals (derived from structured fields)
+  // Separate section so AI gets both "what was observed" and "what it tends to mean"
+  if (ctx.palmTraits) {
+    const traitContext = buildPalmTraitContext(ctx.palmTraits)
+    if (traitContext) sections.push(traitContext)
+  }
+
+  // Persistent memory — behavioral history from past sessions
   if (ctx.memoryContext) {
     sections.push(ctx.memoryContext)
   }

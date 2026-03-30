@@ -76,11 +76,12 @@ function memoryKeys(ctx: FullUserContext): string[] {
 
 function copyArgs(ctx: FullUserContext) {
   return {
-    firstName:       ctx.firstName,
-    focusArea:       ctx.focusArea,
+    firstName:        ctx.firstName,
+    focusArea:        ctx.focusArea,
     emotionalPattern: ctx.emotionalPattern,
-    memoryKeys:      memoryKeys(ctx),
-    starSign:        ctx.starSign,
+    memoryKeys:       memoryKeys(ctx),
+    starSign:         ctx.starSign,
+    palmFeatures:     ctx.palmFeatures,
   } as const
 }
 
@@ -95,8 +96,8 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
     case 'signed_up_unpaid': {
       // Generate two FOMO triggers in parallel
       const [readingCopy, insightCopy] = await Promise.all([
-        generateTriggerCopy('fomo_reading_preview', args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign),
-        generateTriggerCopy('fomo_insight_tease',   args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign),
+        generateTriggerCopy('fomo_reading_preview', args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign, args.palmFeatures),
+        generateTriggerCopy('fomo_insight_tease',   args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign, args.palmFeatures),
       ])
 
       triggers.push(
@@ -119,7 +120,7 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
     case 'paid_inactive': {
       const copy = await generateTriggerCopy(
         'reactivation_insight',
-        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign
+        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign, args.palmFeatures
       )
       triggers.push({
         user_id: ctx.userId,
@@ -133,7 +134,7 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
     case 'at_risk_churn': {
       const copy = await generateTriggerCopy(
         'churn_prevention_value',
-        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign
+        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign, args.palmFeatures
       )
       triggers.push({
         user_id: ctx.userId,
@@ -147,7 +148,7 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
     case 'paid_active': {
       const copy = await generateTriggerCopy(
         'retention_daily_insight',
-        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign
+        args.firstName, args.focusArea, args.emotionalPattern, args.memoryKeys, args.starSign, args.palmFeatures
       )
       triggers.push({
         user_id: ctx.userId,
