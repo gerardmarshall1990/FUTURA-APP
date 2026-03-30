@@ -197,23 +197,3 @@ export class FuturaAnalytics {
   }
 }
 
-// ─── Analytics API route (/api/analytics/track) ───────────────────────────────
-
-import { NextRequest, NextResponse } from 'next/server'
-
-export async function POST_ANALYTICS_TRACK(req: NextRequest) {
-  try {
-    const { userId, eventName, properties } = await req.json()
-
-    if (!eventName) {
-      return NextResponse.json({ error: 'eventName required' }, { status: 400 })
-    }
-
-    await trackEvent(userId ?? null, eventName, properties)
-    return NextResponse.json({ ok: true })
-  } catch (err) {
-    // Never return 500 for analytics — don't break the user experience
-    console.error('[analytics/track]', err)
-    return NextResponse.json({ ok: true })
-  }
-}

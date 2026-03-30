@@ -63,9 +63,6 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
     ...ctx.memorySnapshot.event,
   ].map(m => ({ key_theme: m.key, description: m.value }))
 
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const dayOfWeek = days[new Date().getDay()]
-
   const insightText = await generateDailyInsight(
     ctx.identitySummary,
     ctx.futureTheme,
