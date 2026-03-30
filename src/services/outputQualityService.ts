@@ -92,6 +92,49 @@ export function isGenericOutput(text: string, signals: QualitySignals): boolean 
   return !hasPersonalization
 }
 
+// Endings that signal the model used a generic hook instead of a specific one
+const GENERIC_HOOK_PHRASES = [
+  'what do you think?',
+  'how does that feel?',
+  'how does that land?',
+  'does that resonate?',
+  'does this resonate?',
+  'does that connect?',
+  'only you know',
+  'you already know the answer',
+  "you'll figure it out",
+  'the answer is within you',
+  'trust your instincts',
+  'trust your gut',
+  'listen to your heart',
+  'what comes up for you',
+  'what comes up when you read that',
+]
+
+/**
+ * Returns true if the response ends with a generic, formulaic hook.
+ * Checks only the last ~100 characters so the full response isn't penalised
+ * for containing these phrases in passing.
+ */
+export function hasGenericHook(text: string): boolean {
+  const tail = text.slice(-120).toLowerCase()
+  for (const phrase of GENERIC_HOOK_PHRASES) {
+    if (tail.includes(phrase)) return true
+  }
+  return false
+}
+
+/**
+ * Builds a hook-specific regeneration instruction.
+ * Prepended to the system prompt on retry when a generic hook is detected.
+ */
+export function buildHookRegenerationInstruction(): string {
+  return `HOOK REGENERATION REQUIRED: The previous response ended with a generic, formulaic closing line.
+End with a SPECIFIC observation instead — one of: a deeper layer beneath what they described, a pattern inversion showing how their specific pattern distorts the situation, an unresolved surface that names what they haven't said, or a real question redirect that surfaces the question behind their question.
+ABSOLUTELY FORBIDDEN as final lines: "What do you think?", "Does that resonate?", "How does that feel?", "Only you know", "Trust your instincts", any open-ended question that restates their topic.
+If no specific hook emerges, end the response cleanly without one.`
+}
+
 /**
  * Builds a regeneration instruction to prepend to the system prompt.
  * Forces the model to reference specific identity anchors on the retry.

@@ -59,6 +59,8 @@ import type {
 import {
   isGenericOutput,
   buildRegenerationInstruction,
+  hasGenericHook,
+  buildHookRegenerationInstruction,
   type QualitySignals,
 } from '@/services/outputQualityService'
 
@@ -302,6 +304,7 @@ export async function sendAdvisorMessage(
     palmFeatures:     ctx.palmFeatures,
   }
 
+  // Quality gate 1 — generic content (no personalization signals)
   if (isGenericOutput(result, signals)) {
     const forcePersonalization = buildRegenerationInstruction(signals)
     const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -317,6 +320,24 @@ export async function sendAdvisorMessage(
       stop: ['\n\n\n'],
     })
     return retry.choices[0].message.content?.trim() ?? result
+  }
+
+  // Quality gate 2 — generic hook ending (formulaic closing line)
+  if (hasGenericHook(result)) {
+    const hookInstruction = buildHookRegenerationInstruction()
+    const hookRetryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${hookInstruction}\n\n${systemPrompt}` },
+      ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: newMessage },
+    ]
+    const hookRetry = await openai.chat.completions.create({
+      model: MODELS.fast,
+      max_tokens: 320,
+      temperature: 0.82,  // slightly higher temp to break the formulaic pattern
+      messages: hookRetryMessages,
+      stop: ['\n\n\n'],
+    })
+    return hookRetry.choices[0].message.content?.trim() ?? result
   }
 
   return result
