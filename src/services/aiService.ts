@@ -474,6 +474,72 @@ export async function generateDailyInsight(
   )
 }
 
+// ─── Follow-Up Prompt Generation ─────────────────────────────────────────────
+
+const FOLLOW_UP_PROMPT_SYSTEM = `You generate follow-up conversation prompts for a personal AI pattern advisor called Futura.
+
+You receive a user message and the advisor's response, which ends with a specific hook.
+
+Generate exactly 3 follow-up prompts the user would naturally type next.
+
+HOOK DETECTION — read the advisor's final sentence to identify the hook type:
+- Deeper layer ("The thing underneath...") → probe that specific layer directly
+- Pattern inversion ("Your pattern makes this feel like X when it's Y") → test or explore the reframe
+- Unresolved surface ("What hasn't been named is...") → approach the unsaid thing
+- Real question redirect ("The real question isn't X — it's Y") → engage with the surfaced real question
+- Continuity echo ("This keeps surfacing because...") → continue that thread
+
+Generate one of each:
+1. DEEPEN — follows the hook angle directly, goes one level deeper into what the response named
+2. CHALLENGE — pushes against or tests the observation (what would make it not true, or the harder version)
+3. ADJACENT — opens a related but unexplored dimension that the current thread is touching
+
+Rules:
+- Each prompt must be specific to this exact conversation — not a generic opener
+- Maximum 12 words per prompt
+- Phrased naturally — how the user would actually type it into a chat
+- No question marks needed
+- FORBIDDEN: "Tell me more", "How does that feel?", "What do you think?", "Help me understand", "Does that resonate?", "Can you explain", any generic conversational prompt
+
+Return valid JSON only: ["deepen prompt", "challenge prompt", "adjacent prompt"]`
+
+/**
+ * Generates 3 context-aware follow-up prompts aligned with the hook used in the response.
+ * Called non-blocking after each advisor turn — response arrives first, prompts appear after.
+ */
+export async function generateFollowUpPrompts(
+  userMessage: string,
+  advisorResponse: string,
+  focusArea: string,
+  emotionalPattern: string,
+  corePattern: string,
+): Promise<string[]> {
+  const userPrompt = `User message: "${userMessage}"
+
+Advisor response: "${advisorResponse}"
+
+User context:
+- Focus area: ${focusArea.replace(/_/g, ' ')}
+- Core pattern: ${corePattern.replace(/_/g, ' ')}
+- Emotional pattern: ${emotionalPattern.replace(/_/g, ' ')}
+
+Generate 3 follow-up prompts.`
+
+  const raw = await complete(FOLLOW_UP_PROMPT_SYSTEM, userPrompt, 'fast', 200, 0.72)
+
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    if (Array.isArray(parsed) && parsed.every((p: unknown) => typeof p === 'string')) {
+      return (parsed as string[]).slice(0, 4).filter(p => p.trim().length > 0)
+    }
+  } catch {
+    // fall through to empty
+  }
+
+  return []
+}
+
 // ─── Lifecycle Trigger Copy ───────────────────────────────────────────────────
 
 export interface TriggerCopy {

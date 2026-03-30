@@ -173,6 +173,7 @@ function ChatPageInner() {
   const [showPaywall, setShowPaywall] = useState(false)
   const [showSuggested, setShowSuggested] = useState(true)
   const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS)
+  const [followUpPrompts, setFollowUpPrompts] = useState<string[]>([])
 
   // User context for personalized paywall modal
   const [advisorName, setAdvisorName] = useState<string | null>(null)
@@ -224,6 +225,7 @@ function ChatPageInner() {
     if (!text.trim() || sending || !userId) return
 
     setShowSuggested(false)
+    setFollowUpPrompts([])
     setMessages(prev => [...prev, { role: 'user', content: text }])
     setInput('')
     setSending(true)
@@ -243,6 +245,17 @@ function ChatPageInner() {
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       if (data.sessionId) setSessionId(data.sessionId)
       decrementMessages()
+
+      // Generate follow-up prompts non-blocking — response renders first,
+      // prompts appear ~500ms later once the AI call resolves
+      fetch('/api/prompts/follow-up', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userMessage: text, advisorResponse: data.response }),
+      })
+        .then(r => r.json())
+        .then(d => { if (Array.isArray(d.prompts) && d.prompts.length > 0) setFollowUpPrompts(d.prompts) })
+        .catch(() => {})
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -314,6 +327,32 @@ function ChatPageInner() {
         }}>
           {messages.map((msg, i) => <MessageBubble key={i} message={msg} />)}
           {sending && <TypingIndicator />}
+
+          {/* Follow-up prompts — shown after each advisor response, aligned with the hook */}
+          {!sending && messages.length > 1 && messages[messages.length - 1]?.role === 'assistant' && followUpPrompts.length > 0 && (
+            <div className="animate-fade-up" style={{ marginTop: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {followUpPrompts.map(prompt => (
+                <button
+                  key={prompt}
+                  onClick={() => sendMessage(prompt)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(201,169,110,0.18)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.55rem 0.9rem',
+                    color: 'rgba(201,169,110,0.65)',
+                    fontFamily: 'var(--font-body)',
+                    fontWeight: 300, fontSize: '0.825rem',
+                    textAlign: 'left', cursor: 'pointer',
+                    letterSpacing: '0.01em',
+                    transition: 'border-color 0.2s ease, color 0.2s ease',
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Suggested prompts — shown before first user message, uses API prompts */}
           {showSuggested && messages.length === 1 && !sending && (
