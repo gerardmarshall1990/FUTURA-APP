@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, ProgressBar, PremiumButton, Orb } from '@/components/shared'
 import { useOnboardingStore, useSessionStore } from '@/store'
@@ -164,6 +164,132 @@ function NameScreen({ onNext }: { onNext: () => void }) {
   )
 }
 
+// ─── Custom Select (no native dropdown — fully dark-themed) ──────────────────
+
+function CustomSelect({
+  value,
+  placeholder,
+  options,
+  onChange,
+}: {
+  value: string
+  placeholder: string
+  options: Array<{ label: string; value: string | number }>
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Scroll selected item into view when opening
+  useEffect(() => {
+    if (open && value && listRef.current) {
+      const selected = listRef.current.querySelector('[data-selected="true"]') as HTMLElement | null
+      if (selected) selected.scrollIntoView({ block: 'center' })
+    }
+  }, [open, value])
+
+  const selectedLabel = options.find(o => String(o.value) === value)?.label ?? placeholder
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          width: '100%',
+          background: 'rgba(201,169,110,0.05)',
+          border: `1px solid ${open ? 'rgba(201,169,110,0.5)' : value ? 'rgba(201,169,110,0.3)' : 'rgba(201,169,110,0.18)'}`,
+          borderRadius: '10px',
+          padding: '12px 8px',
+          fontFamily: 'var(--font-body)',
+          fontSize: '12px',
+          color: value ? '#F0EBE1' : 'rgba(240,235,225,0.35)',
+          cursor: 'pointer',
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '4px',
+          transition: 'border-color 0.2s',
+          boxShadow: open ? '0 0 0 1px rgba(201,169,110,0.12)' : 'none',
+        }}
+      >
+        <span style={{ flex: 1, textAlign: 'center' }}>{selectedLabel}</span>
+        <span style={{ fontSize: '8px', color: 'rgba(201,169,110,0.45)', flexShrink: 0 }}>
+          {open ? '▲' : '▼'}
+        </span>
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          role="listbox"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 5px)',
+            left: 0,
+            right: 0,
+            background: '#0F0E0C',
+            border: '1px solid rgba(201,169,110,0.28)',
+            borderRadius: '10px',
+            maxHeight: '210px',
+            overflowY: 'auto',
+            zIndex: 1000,
+            boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {options.map(opt => {
+            const isSelected = String(opt.value) === value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                data-selected={isSelected}
+                aria-selected={isSelected}
+                onClick={() => { onChange(String(opt.value)); setOpen(false) }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: isSelected ? 'rgba(201,169,110,0.13)' : 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid rgba(201,169,110,0.06)',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '13px',
+                  color: isSelected ? '#C9A96E' : 'rgba(240,235,225,0.68)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                {opt.label}
+                {isSelected && <span style={{ fontSize: '10px', color: '#C9A96E' }}>✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Screen 2: Date of Birth ──────────────────────────────────────────────────
 
 function DobScreen({ onNext }: { onNext: () => void }) {
@@ -188,14 +314,6 @@ function DobScreen({ onNext }: { onNext: () => void }) {
     onNext()
   }
 
-  const selStyle: React.CSSProperties = {
-    flex: 1, background: 'rgba(201,169,110,0.05)',
-    border: '1px solid rgba(201,169,110,0.18)', borderRadius: '10px',
-    padding: '12px 6px', fontFamily: 'var(--font-body)', fontSize: '12px',
-    color: 'rgba(240,235,225,0.55)', outline: 'none', cursor: 'pointer',
-    textAlign: 'center', WebkitAppearance: 'none' as never,
-  }
-
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
       <p style={stepTag}>Step 2 of 7 — Your birth</p>
@@ -206,24 +324,24 @@ function DobScreen({ onNext }: { onNext: () => void }) {
       <p style={qSub}>Your date of birth unlocks your star sign, life path number, and every cosmic pattern active in your life right now.</p>
 
       <div style={{ display: 'flex', gap: '7px', marginBottom: '10px' }}>
-        <select style={selStyle} value={day} onChange={e => setDay(e.target.value)}>
-          <option value="">Day</option>
-          {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-        <select style={selStyle} value={month} onChange={e => handleMonthChange(e.target.value)}>
-          <option value="">Month</option>
-          {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-            <option key={m} value={i + 1}>{m}</option>
-          ))}
-        </select>
-        <select style={selStyle} value={year} onChange={e => setYear(e.target.value)}>
-          <option value="">Year</option>
-          {Array.from({ length: 67 }, (_, i) => 2006 - i).map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+        <CustomSelect
+          value={day}
+          placeholder="Day"
+          options={Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1), value: i + 1 }))}
+          onChange={setDay}
+        />
+        <CustomSelect
+          value={month}
+          placeholder="Month"
+          options={['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => ({ label: m, value: i + 1 }))}
+          onChange={handleMonthChange}
+        />
+        <CustomSelect
+          value={year}
+          placeholder="Year"
+          options={Array.from({ length: 87 }, (_, i) => 2006 - i).map(y => ({ label: String(y), value: y }))}
+          onChange={setYear}
+        />
       </div>
 
       {sign && (
@@ -323,27 +441,17 @@ type PalmStatus = 'idle' | 'uploading' | 'analyzing' | 'done' | 'error'
 function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumber: number }) {
   const { setPalmImage, palmPreviewUrl } = useOnboardingStore()
   const { userId } = useSessionStore()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [status, setStatus] = useState<PalmStatus>('idle')
   const [errorMsg, setErrorMsg] = useState('')
-  const [palmFile, setPalmFile] = useState<File | null>(null)
-
-  const statusLabels: Record<PalmStatus, string> = {
-    idle: 'Tap to upload · or drag & drop',
-    uploading: 'Uploading...',
-    analyzing: 'Reading your palm lines...',
-    done: '✓ Palm analyzed',
-    error: errorMsg || 'Try again with a clearer image',
-  }
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return
-    setPalmFile(file)
     setStatus('uploading')
     setErrorMsg('')
 
-    // Show local preview immediately
     const preview = URL.createObjectURL(file)
     setPalmImage(preview, preview)
 
@@ -359,7 +467,6 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
         throw new Error(error)
       }
       const { publicUrl } = await res.json()
-      // Update store with the permanent public URL
       setPalmImage(publicUrl, preview)
       setStatus('done')
     } catch (err) {
@@ -377,89 +484,145 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
 
   const isAnalyzing = status === 'uploading' || status === 'analyzing'
   const canContinue = status === 'done'
+  const showCapture = !palmPreviewUrl || status === 'error'
 
   return (
-    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem', paddingTop: '1rem' }}>
+    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
       <div>
         <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 300, letterSpacing: '-0.01em', marginBottom: '0.6rem' }}>
           Scan your palm
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.65 }}>
-          Hold your dominant hand flat, palm facing the camera in good light. Your palm lines are the anchor of your reading.
+          Hold your dominant hand flat, palm facing up in good light. Your lines are the anchor of your reading.
         </p>
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => !isAnalyzing && fileRef.current?.click()}
-        style={{
-          flex: 1, minHeight: 240,
-          border: `1px dashed ${dragging ? 'var(--gold)' : canContinue ? 'rgba(201,169,110,0.4)' : status === 'error' ? 'rgba(255,80,80,0.3)' : 'var(--border)'}`,
-          borderRadius: 'var(--radius-lg)',
-          background: dragging ? 'var(--gold-glow)' : 'var(--bg-card)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          cursor: isAnalyzing ? 'wait' : 'pointer',
-          transition: 'all 0.2s ease', overflow: 'hidden', position: 'relative',
-        }}
-      >
-        {palmPreviewUrl ? (
-          <>
-            <img src={palmPreviewUrl} alt="Palm" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: isAnalyzing ? 0.35 : 0.55 }} />
-            <div style={{ position: 'relative', zIndex: 1, background: 'rgba(9,9,11,0.75)', padding: '0.5rem 1.2rem', borderRadius: 'var(--radius-full)', backdropFilter: 'blur(8px)' }}>
-              <span style={{
-                color: status === 'error' ? '#ff6060' : 'var(--gold)',
-                fontSize: '0.8rem', letterSpacing: '0.06em',
-              }}>
-                {statusLabels[status]}
-              </span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ marginBottom: '1rem', opacity: 0.3 }}>
-              <Orb size={64} intensity={1.5} animated={false} />
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', letterSpacing: '0.04em' }}>
-              {statusLabels[status]}
-            </p>
-          </>
-        )}
-
-        {/* Analysis progress ring */}
-        {isAnalyzing && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 2,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: '50%',
-              border: '2px solid rgba(201,169,110,0.15)',
-              borderTopColor: 'var(--gold)',
-              animation: 'rotate-slow 1s linear infinite',
-            }} />
-          </div>
-        )}
-
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
-      </div>
-
-      {/* Retry on error */}
-      {status === 'error' && (
-        <button
-          onClick={() => { setStatus('idle'); setPalmFile(null) }}
-          style={{ background: 'none', border: '1px solid rgba(255,100,100,0.25)', borderRadius: '8px', color: 'rgba(255,120,120,0.7)', fontSize: '0.75rem', padding: '0.5rem 1rem', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+      {/* Preview area — shown once a photo is selected */}
+      {palmPreviewUrl && !showCapture && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          style={{
+            position: 'relative', minHeight: 220,
+            border: `1px solid ${canContinue ? 'rgba(201,169,110,0.4)' : 'rgba(201,169,110,0.15)'}`,
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+            background: 'var(--bg-card)',
+          }}
         >
-          Try a different image
+          <img
+            src={palmPreviewUrl}
+            alt="Palm preview"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: isAnalyzing ? 0.3 : 0.6 }}
+          />
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isAnalyzing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(201,169,110,0.15)', borderTopColor: 'var(--gold)', animation: 'rotate-slow 1s linear infinite' }} />
+                <span style={{ background: 'rgba(9,9,11,0.8)', backdropFilter: 'blur(8px)', padding: '5px 14px', borderRadius: '100px', color: 'var(--gold)', fontSize: '0.78rem', letterSpacing: '0.05em' }}>
+                  Reading your palm lines...
+                </span>
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(9,9,11,0.75)', backdropFilter: 'blur(8px)', padding: '6px 16px', borderRadius: '100px' }}>
+                <span style={{ color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: '0.06em' }}>✓ Palm analyzed</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Capture buttons — shown when no image selected or on error */}
+      {showCapture && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          style={{
+            display: 'flex', flexDirection: 'column', gap: '10px',
+            padding: dragging ? '20px' : '0',
+            border: dragging ? '1px dashed rgba(201,169,110,0.5)' : '1px dashed transparent',
+            borderRadius: 'var(--radius-lg)',
+            transition: 'all 0.2s',
+          }}
+        >
+          {status === 'error' && (
+            <div style={{ background: 'rgba(255,80,80,0.07)', border: '1px solid rgba(255,80,80,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '4px' }}>
+              <p style={{ color: 'rgba(255,120,120,0.8)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', margin: 0 }}>
+                {errorMsg || 'Analysis failed — try a clearer image in good light'}
+              </p>
+            </div>
+          )}
+
+          {/* Primary: camera */}
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            style={{
+              width: '100%', padding: '16px',
+              background: 'rgba(201,169,110,0.08)',
+              border: '1px solid rgba(201,169,110,0.32)',
+              borderRadius: '14px',
+              fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: '#C9A96E', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+              transition: 'all 0.2s',
+            }}
+          >
+            <span style={{ fontSize: '18px' }}>📷</span>
+            Scan palm now
+          </button>
+
+          {/* Secondary: gallery */}
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            style={{
+              width: '100%', padding: '14px',
+              background: 'transparent',
+              border: '1px solid rgba(201,169,110,0.13)',
+              borderRadius: '14px',
+              fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 400,
+              letterSpacing: '0.05em',
+              color: 'rgba(240,235,225,0.4)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              transition: 'all 0.2s',
+            }}
+          >
+            <span style={{ fontSize: '15px' }}>↑</span>
+            Upload existing photo
+          </button>
+
+          {dragging && (
+            <p style={{ textAlign: 'center', color: 'rgba(201,169,110,0.55)', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>
+              Drop your palm photo here
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Hidden file inputs */}
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
+      <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
+
+      {/* Retake option when done */}
+      {canContinue && (
+        <button
+          type="button"
+          onClick={() => { setStatus('idle'); setPalmImage('', '') }}
+          style={{ background: 'none', border: 'none', color: 'rgba(240,235,225,0.25)', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'var(--font-body)', padding: '0', letterSpacing: '0.03em', marginTop: '-8px' }}
+        >
+          Retake photo
         </button>
       )}
 
       <PremiumButton onClick={onNext} disabled={!canContinue} loading={isAnalyzing} size="lg">
-        {canContinue ? 'Continue' : isAnalyzing ? 'Analyzing your palm...' : 'Upload your palm to continue'}
+        {canContinue ? 'Continue' : isAnalyzing ? 'Analyzing your palm...' : 'Capture your palm to continue'}
       </PremiumButton>
 
       <p style={{ textAlign: 'center', fontSize: '0.68rem', color: 'rgba(240,235,225,0.2)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>
