@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { isAdminUser } from '@/lib/adminBypass'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2024-06-20',
@@ -181,6 +182,11 @@ export async function applyWebhookResult(result: WebhookResult): Promise<void> {
 // ─── Paywall Status ───────────────────────────────────────────────────────────
 
 export async function getPaywallStatus(userId: string): Promise<PaywallStatus> {
+  // Admin bypass — returns full access without touching the DB
+  if (isAdminUser(userId)) {
+    return { canChat: true, canViewFullReading: true, remainingMessages: 999, isUnlocked: true, isSubscribed: true }
+  }
+
   const { data: user } = await getAdminClient()
     .from('users')
     .select('unlock_status, subscription_status, remaining_chat_messages')

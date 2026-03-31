@@ -7,6 +7,7 @@ import { shouldTriggerPaywall } from '@/services/stripeService'
 import { assembleUserContext } from '@/services/profileOrchestrator'
 import { writeMemory } from '@/services/memoryService'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { isAdminUser } from '@/lib/adminBypass'
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,8 +31,9 @@ export async function POST(req: NextRequest) {
 
     const isSubscribed = user.subscription_status === 'active'
     const isUnlocked   = user.unlock_status || isSubscribed
+    const adminBypass  = isAdminUser(userId)
 
-    if (shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
+    if (!adminBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
       return NextResponse.json({ paywallTriggered: true }, { status: 402 })
     }
 
