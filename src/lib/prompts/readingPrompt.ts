@@ -98,7 +98,9 @@ WHAT TO DO:
 - Remove any generic phrases ("many people", "often in life", "it's natural to")
 - Make every sentence feel like it is specifically about THIS person
 - Tighten language — cut filler words ruthlessly
-- Preserve the emotional arc: recognition → validation → present tension → future pressure
+- Structure the emotional arc: opening recognition → past validation → present tension → near-future escalation
+- The OPENING paragraph is the most important — it must feel immediate and personal. If a name is provided, use it in or near the opening paragraph. If palm data is provided, place the first palm observation in the opening or second paragraph.
+- The FINAL paragraph before the cut must escalate — it should feel like the reading is building to something specific that has just been named but not yet explained
 
 PALM FEATURES (if provided — MANDATORY when present):
 - Palm features are a PRIMARY identity anchor — treat with equal weight to behavioral patterns
@@ -147,6 +149,7 @@ WHAT NOT TO DO:
 - Do not add mystical or spiritual language
 - Do not add generic advice ("believe in yourself", "trust the process")
 - Do not add headers or formatting
+- NEVER write meta-commentary about the reading itself: phrases like "the reading reveals", "the full reading maps", "what follows shows", "the deeper section names" are forbidden — transform these into actual observations. This section IS the revelation; write what it reveals, do not describe what it reveals.
 
 OUTPUT:
 Return only the polished locked continuation. Plain text. Paragraphs separated by blank lines. Nothing else.`

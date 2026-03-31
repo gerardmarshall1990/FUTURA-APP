@@ -77,37 +77,62 @@ function CutZone({ cutLine, lockedPreview, focusArea }: {
   const depthLabel = focusArea ? FOCUS_DEPTH_LABELS[focusArea] : 'what is coming next in your pattern'
 
   return (
-    <div style={{ position: 'relative', marginTop: '0.75rem' }}>
+    <div style={{ marginTop: '0.25rem' }}>
+      {/* Cut line — visible, creates the hook. Not blurred. */}
       <p style={{
-        fontSize: '0.72rem',
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        color: 'rgba(201,169,110,0.5)',
+        color: 'var(--text-primary)',
+        fontSize: '1rem',
+        lineHeight: 1.8,
+        letterSpacing: '0.005em',
         fontFamily: 'var(--font-body)',
-        marginBottom: '0.6rem',
+        fontWeight: 300,
+        fontStyle: 'italic',
+        opacity: 0.85,
       }}>
-        Your reading continues — {depthLabel}
+        {cutLine}
       </p>
 
-      <div style={{ position: 'relative' }}>
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 1,
-          background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 80%)',
-          borderRadius: '4px',
-        }} />
+      {/* Lock indicator */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.75rem',
+        margin: '1rem 0 0.75rem',
+      }}>
+        <div style={{ flex: 1, height: '1px', background: 'rgba(201,169,110,0.2)' }} />
         <p style={{
-          color: 'var(--text-secondary)',
-          fontSize: '1rem',
-          lineHeight: 1.8,
+          fontSize: '0.62rem',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'rgba(201,169,110,0.45)',
           fontFamily: 'var(--font-body)',
-          fontWeight: 300,
-          filter: 'blur(5px)',
-          userSelect: 'none',
-          pointerEvents: 'none',
+          flexShrink: 0,
         }}>
-          {cutLine} {lockedPreview}
+          Reading locked · {depthLabel}
         </p>
+        <div style={{ flex: 1, height: '1px', background: 'rgba(201,169,110,0.2)' }} />
       </div>
+
+      {/* Blurred locked preview */}
+      {lockedPreview && (
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 1,
+            background: 'linear-gradient(to bottom, transparent 0%, var(--bg) 85%)',
+            borderRadius: '4px',
+          }} />
+          <p style={{
+            color: 'var(--text-secondary)',
+            fontSize: '1rem',
+            lineHeight: 1.8,
+            fontFamily: 'var(--font-body)',
+            fontWeight: 300,
+            filter: 'blur(5px)',
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}>
+            {lockedPreview}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -175,7 +200,7 @@ export default function ReadingPage() {
     : buildFallbackTeaser(name, focusArea)
 
   // Use DB cut line if present; fall back to a standard interruption signal
-  const cutLine = reading?.cutLine || 'This is where your reading deepens — and where most people realise something they had been avoiding.'
+  const cutLine = reading?.cutLine || 'What follows from this is the part most people do not see until after the window has already passed —'
 
   function goToUnlock() {
     router.push('/unlock?source=reading')
