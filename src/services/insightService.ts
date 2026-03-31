@@ -5,15 +5,10 @@
  * Uses assembleUserContext() — no separate profile/palm/memory fetches.
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { generateDailyInsight } from './aiService'
 import { assembleUserContext, assemblePromptContext } from './profileOrchestrator'
 import type { FocusArea } from './profileNormalizationService'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
 
 export interface DailyInsight {
   id: string
@@ -26,7 +21,7 @@ export interface DailyInsight {
 
 export async function getTodaysInsight(userId: string): Promise<DailyInsight | null> {
   const today = new Date().toISOString().split('T')[0]
-  const { data } = await supabaseAdmin
+  const { data } = await getAdminClient()
     .from('daily_insights')
     .select('*')
     .eq('user_id', userId)
@@ -44,7 +39,7 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
   if (!ctx) return null
 
   // Days since reading (still needs a direct fetch — not in ctx)
-  const { data: reading } = await supabaseAdmin
+  const { data: reading } = await getAdminClient()
     .from('readings')
     .select('created_at')
     .eq('user_id', userId)
@@ -73,7 +68,7 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
   )
 
   const today = new Date().toISOString().split('T')[0]
-  const { data } = await supabaseAdmin
+  const { data } = await getAdminClient()
     .from('daily_insights')
     .insert({ user_id: userId, insight_text: insightText, insight_date: today, focus_area: ctx.focusArea })
     .select()
@@ -83,7 +78,7 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
 }
 
 export async function getRecentInsights(userId: string, limit = 7): Promise<DailyInsight[]> {
-  const { data } = await supabaseAdmin
+  const { data } = await getAdminClient()
     .from('daily_insights')
     .select('*')
     .eq('user_id', userId)

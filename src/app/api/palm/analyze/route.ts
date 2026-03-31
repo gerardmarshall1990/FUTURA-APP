@@ -1,13 +1,8 @@
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { analyzePalm } from '@/services/palmAnalysisService'
-
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +23,7 @@ export async function POST(req: NextRequest) {
     const storagePath = `palms/${userId}/palm_${Date.now()}.${ext}`
     const bytes = await file.arrayBuffer()
 
-    const { error: uploadError } = await supabaseAdmin.storage
+    const { error: uploadError } = await getAdminClient().storage
       .from('user-palms')
       .upload(storagePath, bytes, {
         contentType: file.type,
@@ -41,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Get public URL ──────────────────────────────────────────────────────
-    const { data: urlData } = supabaseAdmin.storage
+    const { data: urlData } = getAdminClient().storage
       .from('user-palms')
       .getPublicUrl(storagePath)
 
@@ -57,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 4. Store features + URL in user_profiles ───────────────────────────────
-    const { error: dbError } = await supabaseAdmin
+    const { error: dbError } = await getAdminClient()
       .from('user_profiles')
       .upsert(
         {

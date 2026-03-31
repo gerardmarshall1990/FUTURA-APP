@@ -12,14 +12,7 @@
  * See EVENT_NAMES for the full list.
  */
 
-import { createClient } from '@supabase/supabase-js'
-
-// ─── Admin client for server-side writes ─────────────────────────────────────
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 // ─── Event catalogue ──────────────────────────────────────────────────────────
 
@@ -76,7 +69,7 @@ export async function trackEvent(
   properties?: Record<string, unknown>
 ): Promise<void> {
   try {
-    await supabaseAdmin.from('analytics_events').insert({
+    await getAdminClient().from('analytics_events').insert({
       user_id:    userId,
       event_name: eventName,
       properties: properties ?? {},

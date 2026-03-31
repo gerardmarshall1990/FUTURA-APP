@@ -1,15 +1,10 @@
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
   apiVersion: '2024-06-20',
   typescript: true,
 })
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +35,7 @@ export interface PaywallStatus {
 // ─── Customer Management ──────────────────────────────────────────────────────
 
 export async function getOrCreateStripeCustomer(userId: string, email?: string): Promise<string> {
-  const { data: user } = await supabaseAdmin
+  const { data: user } = await getAdminClient()
     .from('users')
     .select('stripe_customer_id, email')
     .eq('id', userId)
@@ -53,7 +48,7 @@ export async function getOrCreateStripeCustomer(userId: string, email?: string):
     metadata: { futura_user_id: userId },
   })
 
-  await supabaseAdmin.from('users').update({ stripe_customer_id: customer.id }).eq('id', userId)
+  await getAdminClient().from('users').update({ stripe_customer_id: customer.id }).eq('id', userId)
 
   return customer.id
 }
@@ -161,24 +156,24 @@ export async function parseStripeWebhook(
 export async function applyWebhookResult(result: WebhookResult): Promise<void> {
   switch (result.type) {
     case 'unlock':
-      await supabaseAdmin.rpc('handle_unlock_purchase', { p_user_id: result.userId, p_amount: result.amount, p_metadata: { source: 'stripe', ...result.metadata } })
+      await getAdminClient().rpc('handle_unlock_purchase', { p_user_id: result.userId, p_amount: result.amount, p_metadata: { source: 'stripe', ...result.metadata } })
       break
     case 'subscription_started':
       if (result.stripeCustomerId) {
-        await supabaseAdmin.from('users').update({ stripe_customer_id: result.stripeCustomerId }).eq('id', result.userId)
+        await getAdminClient().from('users').update({ stripe_customer_id: result.stripeCustomerId }).eq('id', result.userId)
       }
-      await supabaseAdmin.rpc('handle_subscription_started', { p_user_id: result.userId, p_amount: result.amount, p_metadata: { source: 'stripe' } })
+      await getAdminClient().rpc('handle_subscription_started', { p_user_id: result.userId, p_amount: result.amount, p_metadata: { source: 'stripe' } })
       break
     case 'subscription_renewed':
-      await supabaseAdmin.from('users').update({ subscription_status: 'active' }).eq('id', result.userId)
-      await supabaseAdmin.from('monetization_events').insert({ user_id: result.userId, event_type: 'subscription_renewed', event_value: result.amount, metadata: { source: 'stripe' } })
+      await getAdminClient().from('users').update({ subscription_status: 'active' }).eq('id', result.userId)
+      await getAdminClient().from('monetization_events').insert({ user_id: result.userId, event_type: 'subscription_renewed', event_value: result.amount, metadata: { source: 'stripe' } })
       break
     case 'subscription_cancelled':
-      await supabaseAdmin.rpc('handle_subscription_cancelled', { p_user_id: result.userId })
+      await getAdminClient().rpc('handle_subscription_cancelled', { p_user_id: result.userId })
       break
     case 'payment_failed':
-      await supabaseAdmin.from('users').update({ subscription_status: 'past_due' }).eq('id', result.userId)
-      await supabaseAdmin.from('monetization_events').insert({ user_id: result.userId, event_type: 'payment_failed', event_value: 0, metadata: { source: 'stripe' } })
+      await getAdminClient().from('users').update({ subscription_status: 'past_due' }).eq('id', result.userId)
+      await getAdminClient().from('monetization_events').insert({ user_id: result.userId, event_type: 'payment_failed', event_value: 0, metadata: { source: 'stripe' } })
       break
   }
 }
@@ -186,7 +181,7 @@ export async function applyWebhookResult(result: WebhookResult): Promise<void> {
 // ─── Paywall Status ───────────────────────────────────────────────────────────
 
 export async function getPaywallStatus(userId: string): Promise<PaywallStatus> {
-  const { data: user } = await supabaseAdmin
+  const { data: user } = await getAdminClient()
     .from('users')
     .select('unlock_status, subscription_status, remaining_chat_messages')
     .eq('id', userId)
@@ -243,7 +238,7 @@ export async function writeMemoryTheme(
   description: string,
   source: 'onboarding' | 'chat' | 'reading'
 ): Promise<void> {
-  await supabaseAdmin
+  await getAdminClient()
     .from('user_insights_memory')
     .upsert(
       { user_id: userId, key_theme: keyTheme, description, source },
@@ -269,7 +264,7 @@ export async function seedMemoryFromOnboarding(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getCustomerUserId(stripeCustomerId: string): Promise<string | null> {
-  const { data } = await supabaseAdmin.from('users').select('id').eq('stripe_customer_id', stripeCustomerId).single()
+  const { data } = await getAdminClient().from('users').select('id').eq('stripe_customer_id', stripeCustomerId).single()
   return data?.id ?? null
 }
 

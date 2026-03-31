@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { trackEvent } from '@/services/analyticsService'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 // Events that represent meaningful user engagement.
 // These update last_active_at so lifecycle state stays accurate.
@@ -31,7 +26,7 @@ export async function POST(req: NextRequest) {
     // Update last_active_at for engagement events — non-blocking
     // This is what drives lifecycle state (paid_active / paid_inactive / at_risk_churn)
     if (userId && ENGAGEMENT_EVENTS.has(eventName)) {
-      void supabaseAdmin
+      void getAdminClient()
         .from('users')
         .update({ last_active_at: new Date().toISOString() })
         .eq('id', userId)

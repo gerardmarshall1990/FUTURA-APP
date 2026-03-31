@@ -8,18 +8,13 @@
  * assemblePromptContext() → renders FullUserContext into a prompt-injectable string
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { getMemorySnapshot, buildMemoryContext, type MemorySnapshot } from './memoryService'
 import { buildBeliefTone } from './profileNormalizationService'
 import { getUserLifecycleState, type LifecycleState } from './lifecycleEngine'
 import { buildPalmContext, type PalmFeatures } from './palmAnalysisService'
 import { interpretPalmFeatures, buildPalmTraitContext, type PalmTraits } from './palmInterpretationService'
 import { buildContinuityContext } from './memoryService'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,13 +76,13 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     lifecycleState,
     { data: insightRow },
   ] = await Promise.all([
-    supabaseAdmin.from('user_profiles').select('*').eq('user_id', userId).single(),
-    supabaseAdmin
+    getAdminClient().from('user_profiles').select('*').eq('user_id', userId).single(),
+    getAdminClient()
       .from('users')
       .select('unlock_status, subscription_status, remaining_chat_messages')
       .eq('id', userId)
       .single(),
-    supabaseAdmin
+    getAdminClient()
       .from('readings')
       .select('teaser_text, locked_text')
       .eq('user_id', userId)
@@ -97,7 +92,7 @@ export async function assembleUserContext(userId: string): Promise<FullUserConte
     getMemorySnapshot(userId),
     getUserLifecycleState(userId),
     // Today's insight — fetched in parallel, null if not yet generated
-    supabaseAdmin
+    getAdminClient()
       .from('daily_insights')
       .select('insight_text')
       .eq('user_id', userId)

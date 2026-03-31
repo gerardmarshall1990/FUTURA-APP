@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { generateFollowUpPrompts } from '@/services/aiService'
-
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +10,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ prompts: [] })
     }
 
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await getAdminClient()
       .from('user_profiles')
       .select('focus_area, emotional_pattern, core_pattern')
       .eq('user_id', userId)

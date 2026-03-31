@@ -2,16 +2,11 @@ export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { sendAdvisorMessage, extractMemoryThemes, classifyMessageIntent } from '@/services/aiService'
 import { shouldTriggerPaywall } from '@/services/stripeService'
 import { assembleUserContext } from '@/services/profileOrchestrator'
 import { writeMemory } from '@/services/memoryService'
-
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(req: NextRequest) {
   try {
@@ -144,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update last_active_at — drives lifecycle state for reactivation logic
-    void supabaseAdmin
+    void getAdminClient()
       .from('users')
       .update({ last_active_at: new Date().toISOString() })
       .eq('id', userId)

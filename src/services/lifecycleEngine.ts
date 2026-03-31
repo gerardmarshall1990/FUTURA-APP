@@ -7,14 +7,9 @@
  * No hardcoded strings. Every trigger is specific to this person.
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import type { FullUserContext } from './profileOrchestrator'
 import { generateTriggerCopy } from './aiService'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
 
 export type LifecycleState =
   | 'anonymous'
@@ -45,7 +40,7 @@ export interface LifecycleTrigger {
 // ─── Determine User State ────────────────────────────────────────────────────
 
 export async function getUserLifecycleState(userId: string): Promise<LifecycleState> {
-  const { data: user } = await supabaseAdmin
+  const { data: user } = await getAdminClient()
     .from('users')
     .select('unlock_status, subscription_status, last_active_at, created_at')
     .eq('id', userId)
@@ -161,7 +156,7 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
   }
 
   if (triggers.length > 0) {
-    await supabaseAdmin.from('lifecycle_triggers').insert(triggers)
+    await getAdminClient().from('lifecycle_triggers').insert(triggers)
   }
 
   return triggers
@@ -170,7 +165,7 @@ export async function generateLifecycleTriggers(ctx: FullUserContext): Promise<L
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 export async function getPendingTriggers(userId: string): Promise<LifecycleTrigger[]> {
-  const { data } = await supabaseAdmin
+  const { data } = await getAdminClient()
     .from('lifecycle_triggers')
     .select('*')
     .eq('user_id', userId)
@@ -181,7 +176,7 @@ export async function getPendingTriggers(userId: string): Promise<LifecycleTrigg
 }
 
 export async function markTriggerSent(triggerId: string): Promise<void> {
-  await supabaseAdmin
+  await getAdminClient()
     .from('lifecycle_triggers')
     .update({ is_sent: true })
     .eq('id', triggerId)
@@ -193,7 +188,7 @@ export async function trackEngagement(
   metadata?: Record<string, unknown>
 ): Promise<void> {
   await Promise.all([
-    supabaseAdmin.from('engagement_events').insert({ user_id: userId, event_type: eventType, metadata: metadata ?? {} }),
-    supabaseAdmin.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId),
+    getAdminClient().from('engagement_events').insert({ user_id: userId, event_type: eventType, metadata: metadata ?? {} }),
+    getAdminClient().from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId),
   ])
 }

@@ -6,12 +6,7 @@
  * Every AI interaction reads from and writes to this layer.
  */
 
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +35,7 @@ export interface MemorySnapshot {
 // ─── Write Memory ────────────────────────────────────────────────────────────
 
 export async function writeMemory(memory: Omit<UserMemory, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
-  await supabaseAdmin
+  await getAdminClient()
     .from('user_memories')
     .upsert(
       {
@@ -64,7 +59,7 @@ export async function writeMemories(memories: Omit<UserMemory, 'id' | 'created_a
 // ─── Read Memories ───────────────────────────────────────────────────────────
 
 export async function getMemories(userId: string, type?: MemoryType): Promise<UserMemory[]> {
-  let query = supabaseAdmin
+  let query = getAdminClient()
     .from('user_memories')
     .select('*')
     .eq('user_id', userId)

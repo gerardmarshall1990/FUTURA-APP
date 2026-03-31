@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-)
+import { getAdminClient } from '@/lib/supabase/admin'
 
 // 72-hour hold window from reading creation
 const HOLD_HOURS = 72
@@ -21,12 +16,12 @@ export async function GET(req: NextRequest) {
       { data: reading },
       { count: paywallViews },
     ] = await Promise.all([
-      supabaseAdmin
+      getAdminClient()
         .from('user_profiles')
         .select('first_name, focus_area, emotional_pattern, palm_features_json')
         .eq('user_id', userId)
         .single(),
-      supabaseAdmin
+      getAdminClient()
         .from('readings')
         .select('cut_line, created_at')
         .eq('user_id', userId)
@@ -36,7 +31,7 @@ export async function GET(req: NextRequest) {
       // Count previous paywall views — drives tone escalation tier
       // Queried BEFORE the current visit event is fired by the client,
       // so 0 = first time, 1 = second time, 2+ = repeat
-      supabaseAdmin
+      getAdminClient()
         .from('engagement_events')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)

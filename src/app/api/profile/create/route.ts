@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { normalizeProfile } from '@/services/profileNormalizationService'
 import { seedMemoryFromOnboarding } from '@/services/stripeService'
 import { seedMemoriesFromOnboarding } from '@/services/memoryService'
@@ -18,10 +18,7 @@ export async function POST(req: NextRequest) {
 
     const normalized = normalizeProfile({ focusArea, currentState, personalityTrait, ageBand })
 
-    const supabase = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
+    const supabase = getAdminClient()
 
     const { data: profile, error } = await supabase
       .from('user_profiles')
