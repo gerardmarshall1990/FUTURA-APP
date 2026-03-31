@@ -65,11 +65,16 @@ export const MEMORY_EXTRACTION_SYSTEM_PROMPT = `You are analyzing a conversation
 Extract 1–3 key themes from the conversation. Each theme should be:
 - A short label (2–5 words, snake_case format)
 - A brief description (1 sentence)
+- A memory_type classification:
+  - "emotional" — feelings, fears, avoidances, emotional states they return to
+  - "behavioral" — decision patterns, habits, repeated actions or tendencies
+  - "event" — specific life situations or circumstances mentioned
 
 Output as JSON array only. Example:
 [
-  {"key_theme": "relationship_hesitation", "description": "Frequently asks about relationship dynamics and seems to delay acting on what they already sense"},
-  {"key_theme": "career_crossroads", "description": "Multiple questions about direction suggest an unresolved career or life path decision"}
+  {"key_theme": "relationship_hesitation", "memory_type": "emotional", "description": "Frequently returns to relationship dynamics and seems to delay acting on what they already sense"},
+  {"key_theme": "career_crossroads", "memory_type": "behavioral", "description": "Multiple questions about direction suggest an unresolved career decision being circled"},
+  {"key_theme": "job_transition_pending", "memory_type": "event", "description": "Mentioned a pending career move they have not yet committed to"}
 ]
 
 Output only valid JSON. Nothing else.`
@@ -113,6 +118,13 @@ A daily insight is:
 
 The insight should feel like something a trusted advisor who knows you well would say on a Tuesday morning — grounded, specific, and worth pausing on.
 
+PALM FEATURES (if provided):
+- Lightly ground one observation in a specific palm feature — briefly and precisely
+- Do this in roughly 1 in 3 insights maximum — not every day
+- Use probabilistic language: "tends to...", "often shows up as..."
+- Example: "The depth of your heart line tends to make this kind of day harder to move through cleanly — the emotional weight is real, not resistance."
+- If what the user has shared recently contrasts with the palm signal: "this can show up differently depending on your current phase"
+
 Output only the insight text. Nothing else.`
 
 export function buildDailyInsightPrompt(
@@ -121,7 +133,8 @@ export function buildDailyInsightPrompt(
   focusArea: FocusArea,
   memoryThemes: Array<{ key_theme: string; description: string }>,
   dayOfWeek: string,
-  daysSinceReading: number
+  daysSinceReading: number,
+  palmContext?: string,
 ): string {
   const themeContext = memoryThemes.length > 0
     ? memoryThemes.map(t => `- ${t.key_theme}: ${t.description}`).join('\n')
@@ -138,9 +151,9 @@ FOCUS AREA: ${focusArea.replace('_', ' ')}
 BEHAVIORAL THEMES FROM THEIR HISTORY:
 ${themeContext}
 
-CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
+${palmContext ? `${palmContext}\n` : ''}CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
 
-Generate one daily insight for today.`
+Generate one daily insight for today. If palm features are provided, you may ground one observation in a specific palm feature — briefly and precisely.`
 }
 
 // ─── Reading Variation Prompt (A/B Testing) ───────────────────────────────────

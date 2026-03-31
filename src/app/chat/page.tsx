@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { FuturaLogo, PremiumButton } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import { Suspense } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,13 +13,13 @@ interface Message {
   content: string
 }
 
-// ─── Suggested Prompts ────────────────────────────────────────────────────────
+// ─── Fallback suggested prompts — replaced by API on load ────────────────────
 
-const SUGGESTED_PROMPTS = [
-  'Tell me more about my pattern',
-  'What is the shift coming up?',
-  'What should I focus on this week?',
-  'Explain my reading more deeply',
+const FALLBACK_PROMPTS = [
+  'What pattern keeps showing up in my life?',
+  'What shift is building right now?',
+  'What am I avoiding that I already know about?',
+  'What does my reading say about the next few weeks?',
 ]
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
@@ -26,11 +27,7 @@ const SUGGESTED_PROMPTS = [
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user'
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: isUser ? 'flex-end' : 'flex-start',
-      padding: '0.2rem 0',
-    }}>
+    <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', padding: '0.2rem 0' }}>
       <div style={{
         maxWidth: '82%',
         padding: isUser ? '0.7rem 1rem' : '0.9rem 1rem',
@@ -66,8 +63,7 @@ function TypingIndicator() {
       }}>
         {[0, 1, 2].map(i => (
           <div key={i} style={{
-            width: 5, height: 5,
-            borderRadius: '50%',
+            width: 5, height: 5, borderRadius: '50%',
             background: 'var(--text-muted)',
             animation: 'blink 1.2s ease infinite',
             animationDelay: `${i * 0.18}s`,
@@ -78,42 +74,74 @@ function TypingIndicator() {
   )
 }
 
-// ─── Upgrade Modal ────────────────────────────────────────────────────────────
+// ─── Upgrade Modal ─────────────────────────────────────────────────────────────
+// Copy is personalized using name, focusArea, and emotionalPattern.
+// Navigates to /unlock?source=chat so the unlock page renders the chat variant.
 
-function UpgradeModal({ onDismiss, onUpgrade }: { onDismiss: () => void; onUpgrade: () => void }) {
+function UpgradeModal({
+  name,
+  focusArea,
+  emotionalPattern,
+  onDismiss,
+  onUpgrade,
+}: {
+  name: string | null
+  focusArea: string | null
+  emotionalPattern: string | null
+  onDismiss: () => void
+  onUpgrade: () => void
+}) {
+  const focusLabel = focusArea
+    ? { love: 'love life', money: 'financial pattern', life_direction: 'life direction' }[focusArea] ?? focusArea.replace(/_/g, ' ')
+    : null
+
+  const emotional = emotionalPattern?.replace(/_/g, ' ')
+
+  const headline = name
+    ? `${name}, you reached the limit at exactly the right moment`
+    : 'You reached the limit at exactly the right moment'
+
+  const body = emotional && focusLabel
+    ? `The questions you've been asking are the kind that reveal ${emotional} patterns most clearly. To go deeper on your ${focusLabel}, continue with unlimited conversations.`
+    : emotional
+      ? `The questions you've been asking are the kind that reveal ${emotional} patterns most clearly. The conversation was building toward the most important part.`
+      : focusLabel
+        ? `The questions you've been asking are exactly the kind that unlock the deepest ${focusLabel} patterns. Continue with unlimited conversations.`
+        : `The conversation was building toward the most important part of your pattern. Don't stop here.`
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 50,
-      background: 'rgba(9,9,11,0.85)', backdropFilter: 'blur(12px)',
+      background: 'rgba(9,9,11,0.88)', backdropFilter: 'blur(12px)',
       display: 'flex', alignItems: 'flex-end', padding: '0 1.25rem 2rem',
     }}>
       <div className="animate-fade-up glass-card" style={{ width: '100%', maxWidth: 420, margin: '0 auto' }}>
         <p style={{
-          color: 'var(--gold)', fontSize: '0.72rem',
-          letterSpacing: '0.12em', textTransform: 'uppercase',
-          marginBottom: '0.75rem',
+          color: 'var(--gold)', fontSize: '0.68rem',
+          letterSpacing: '0.14em', textTransform: 'uppercase',
+          marginBottom: '0.65rem',
         }}>
-          Deeper guidance available
+          Conversation limit reached
         </p>
 
         <h2 style={{
           fontFamily: 'var(--font-display)',
-          fontSize: '1.6rem', fontWeight: 300,
-          marginBottom: '0.75rem',
+          fontSize: '1.55rem', fontWeight: 300,
+          lineHeight: 1.2, marginBottom: '0.7rem',
         }}>
-          Continue your guidance
+          {headline}
         </h2>
 
         <p style={{
           color: 'var(--text-secondary)', fontSize: '0.875rem',
           lineHeight: 1.65, marginBottom: '1.5rem',
         }}>
-          There's a deeper layer to what your pattern is revealing. Unlock unlimited conversations with your personal advisor.
+          {body}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <PremiumButton onClick={onUpgrade} size="md">
-            Unlock deeper guidance
+            Continue this conversation
           </PremiumButton>
           <button
             onClick={onDismiss}
@@ -133,27 +161,61 @@ function UpgradeModal({ onDismiss, onUpgrade }: { onDismiss: () => void; onUpgra
 
 // ─── Chat Page ────────────────────────────────────────────────────────────────
 
-export default function ChatPage() {
+function ChatPageInner() {
   const router = useRouter()
+  const params = useSearchParams()
   const { userId, remainingMessages, isSubscribed, isUnlocked, decrementMessages } = useSessionStore()
+
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [showPaywall, setShowPaywall] = useState(false)
   const [showSuggested, setShowSuggested] = useState(true)
+  const [suggestedPrompts, setSuggestedPrompts] = useState<string[]>(FALLBACK_PROMPTS)
+  const [followUpPrompts, setFollowUpPrompts] = useState<string[]>([])
+
+  // User context for personalized paywall modal
+  const [advisorName, setAdvisorName] = useState<string | null>(null)
+  const [userFocusArea, setUserFocusArea] = useState<string | null>(null)
+  const [userEmotionalPattern, setUserEmotionalPattern] = useState<string | null>(null)
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
 
-    // Opening message from advisor
-    setMessages([{
-      role: 'assistant',
-      content: `I've reviewed your reading. What would you like to understand more deeply?`,
-    }])
-  }, [userId, router])
+    // Show typing indicator while fetching personalized opening message
+    setSending(true)
+
+    // Fetch personalized opening message and suggested prompts in parallel
+    Promise.all([
+      fetch(`/api/chat/opening?userId=${userId}`).then(r => r.json()),
+      fetch(`/api/prompts/suggested?userId=${userId}`).then(r => r.json()).catch(() => ({ prompts: [] })),
+    ])
+      .then(([openingData, promptsData]) => {
+        setMessages([{ role: 'assistant', content: openingData.message }])
+        if (openingData.name) setAdvisorName(openingData.name)
+        if (openingData.focusArea) setUserFocusArea(openingData.focusArea)
+        if (openingData.emotionalPattern) setUserEmotionalPattern(openingData.emotionalPattern)
+
+        const apiPrompts: string[] = (promptsData.prompts ?? []).map((p: { text: string }) => p.text)
+        if (apiPrompts.length > 0) setSuggestedPrompts(apiPrompts)
+      })
+      .catch(() => {
+        setMessages([{ role: 'assistant', content: FALLBACK_PROMPTS[0] }])
+      })
+      .finally(() => setSending(false))
+
+    // If arriving from home with a pre-filled prompt, send it immediately
+    const prePrompt = params.get('prompt')
+    if (prePrompt) {
+      // Will be handled after messages are set — deferred
+      setTimeout(() => sendMessage(prePrompt), 1200)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -163,8 +225,8 @@ export default function ChatPage() {
     if (!text.trim() || sending || !userId) return
 
     setShowSuggested(false)
-    const userMessage: Message = { role: 'user', content: text }
-    setMessages(prev => [...prev, userMessage])
+    setFollowUpPrompts([])
+    setMessages(prev => [...prev, { role: 'user', content: text }])
     setInput('')
     setSending(true)
 
@@ -175,24 +237,25 @@ export default function ChatPage() {
         body: JSON.stringify({ userId, sessionId, message: text }),
       })
 
-      if (res.status === 402) {
-        setSending(false)
-        setShowPaywall(true)
-        return
-      }
+      if (res.status === 402) { setSending(false); setShowPaywall(true); return }
 
       const data = await res.json()
-
-      if (data.paywallTriggered) {
-        setSending(false)
-        setShowPaywall(true)
-        return
-      }
+      if (data.paywallTriggered) { setSending(false); setShowPaywall(true); return }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       if (data.sessionId) setSessionId(data.sessionId)
       decrementMessages()
 
+      // Generate follow-up prompts non-blocking — response renders first,
+      // prompts appear ~500ms later once the AI call resolves
+      fetch('/api/prompts/follow-up', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, userMessage: text, advisorResponse: data.response }),
+      })
+        .then(r => r.json())
+        .then(d => { if (Array.isArray(d.prompts) && d.prompts.length > 0) setFollowUpPrompts(d.prompts) })
+        .catch(() => {})
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -204,13 +267,9 @@ export default function ChatPage() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage(input)
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }
 
-  // Auto-resize textarea
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value)
     e.target.style.height = 'auto'
@@ -223,8 +282,7 @@ export default function ChatPage() {
     <main className="page" style={{ padding: 0 }}>
       <div style={{
         display: 'flex', flexDirection: 'column',
-        height: '100dvh', width: '100%', maxWidth: 420,
-        margin: '0 auto',
+        height: '100dvh', width: '100%', maxWidth: 420, margin: '0 auto',
       }}>
 
         {/* Header */}
@@ -239,8 +297,7 @@ export default function ChatPage() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: 'var(--text-muted)', fontSize: '0.8rem',
-              fontFamily: 'var(--font-body)', letterSpacing: '0.06em',
-              textTransform: 'uppercase',
+              fontFamily: 'var(--font-body)', letterSpacing: '0.06em', textTransform: 'uppercase',
             }}
           >
             ← Back
@@ -248,39 +305,66 @@ export default function ChatPage() {
 
           <FuturaLogo size="sm" />
 
-          {/* Message counter */}
-          {!isSubscribed && (
-            <span style={{
-              fontSize: '0.72rem', color: 'var(--text-muted)',
-              letterSpacing: '0.04em',
-            }}>
+          {/* Message counter — framed as remaining sessions, not a countdown */}
+          {isFree && (
+            <button
+              onClick={() => router.push('/unlock?source=chat')}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '0.68rem', color: remainingMessages <= 2 ? 'var(--gold)' : 'var(--text-muted)',
+                letterSpacing: '0.04em', fontFamily: 'var(--font-body)',
+              }}
+            >
               {remainingMessages} left
-            </span>
+            </button>
           )}
         </div>
 
         {/* Messages */}
         <div style={{
-          flex: 1, overflowY: 'auto',
-          padding: '1.25rem',
+          flex: 1, overflowY: 'auto', padding: '1.25rem',
           display: 'flex', flexDirection: 'column', gap: '0.25rem',
         }}>
-          {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
-          ))}
+          {messages.map((msg, i) => <MessageBubble key={i} message={msg} />)}
           {sending && <TypingIndicator />}
 
-          {/* Suggested prompts (shown before first user message) */}
-          {showSuggested && messages.length <= 1 && (
+          {/* Follow-up prompts — shown after each advisor response, aligned with the hook */}
+          {!sending && messages.length > 1 && messages[messages.length - 1]?.role === 'assistant' && followUpPrompts.length > 0 && (
+            <div className="animate-fade-up" style={{ marginTop: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {followUpPrompts.map(prompt => (
+                <button
+                  key={prompt}
+                  onClick={() => sendMessage(prompt)}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(201,169,110,0.18)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '0.55rem 0.9rem',
+                    color: 'rgba(201,169,110,0.65)',
+                    fontFamily: 'var(--font-body)',
+                    fontWeight: 300, fontSize: '0.825rem',
+                    textAlign: 'left', cursor: 'pointer',
+                    letterSpacing: '0.01em',
+                    transition: 'border-color 0.2s ease, color 0.2s ease',
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Suggested prompts — shown before first user message, uses API prompts */}
+          {showSuggested && messages.length === 1 && !sending && (
             <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <p style={{
-                color: 'var(--text-muted)', fontSize: '0.72rem',
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-                marginBottom: '0.25rem',
+                color: 'var(--text-muted)', fontSize: '0.68rem',
+                letterSpacing: '0.1em', textTransform: 'uppercase',
+                marginBottom: '0.2rem',
               }}>
                 Ask your advisor
               </p>
-              {SUGGESTED_PROMPTS.map(prompt => (
+              {suggestedPrompts.map(prompt => (
                 <button
                   key={prompt}
                   onClick={() => sendMessage(prompt)}
@@ -291,8 +375,7 @@ export default function ChatPage() {
                     padding: '0.75rem 1rem',
                     color: 'var(--text-secondary)',
                     fontFamily: 'var(--font-body)',
-                    fontWeight: 300,
-                    fontSize: '0.875rem',
+                    fontWeight: 300, fontSize: '0.875rem',
                     textAlign: 'left', cursor: 'pointer',
                     transition: 'border-color 0.2s ease',
                   }}
@@ -306,34 +389,40 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input area */}
-        <div style={{
-          padding: '0.75rem 1.25rem 1.5rem',
-          borderTop: '1px solid var(--border)',
-          flexShrink: 0,
-        }}>
-          {isFree && remainingMessages <= 1 && remainingMessages > 0 && (
+        {/* Low-message nudge — advisor-voice, not system warning */}
+        {isFree && remainingMessages === 1 && (
+          <div style={{
+            padding: '0.6rem 1.25rem 0',
+            borderTop: '1px solid var(--border)',
+          }}>
             <p style={{
-              color: 'var(--gold)', fontSize: '0.72rem',
-              letterSpacing: '0.04em', marginBottom: '0.6rem',
-              textAlign: 'center',
+              fontSize: '0.72rem', color: 'var(--gold)',
+              letterSpacing: '0.03em', textAlign: 'center',
+              fontFamily: 'var(--font-body)',
             }}>
-              {remainingMessages === 1 ? '1 message remaining' : ''} · <button
-                onClick={() => router.push('/unlock')}
+              1 conversation remaining —{' '}
+              <button
+                onClick={() => router.push('/unlock?source=chat')}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
                   color: 'var(--gold)', fontSize: '0.72rem',
                   fontFamily: 'var(--font-body)', textDecoration: 'underline',
                 }}
               >
-                Unlock unlimited
+                unlock unlimited
               </button>
             </p>
-          )}
+          </div>
+        )}
 
+        {/* Input area */}
+        <div style={{
+          padding: '0.75rem 1.25rem 1.5rem',
+          borderTop: isFree && remainingMessages === 1 ? 'none' : '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
           <div style={{
-            display: 'flex', gap: '0.6rem',
-            alignItems: 'flex-end',
+            display: 'flex', gap: '0.6rem', alignItems: 'flex-end',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-lg)',
@@ -351,7 +440,6 @@ export default function ChatPage() {
                 resize: 'none', color: 'var(--text-primary)',
                 fontFamily: 'var(--font-body)', fontWeight: 300,
                 fontSize: '0.925rem', lineHeight: 1.55,
-
                 minHeight: '24px', maxHeight: '120px',
               }}
             />
@@ -359,13 +447,11 @@ export default function ChatPage() {
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || sending}
               style={{
-                width: 36, height: 36,
-                borderRadius: '50%',
+                width: 36, height: 36, borderRadius: '50%',
                 background: input.trim() && !sending ? 'var(--gold)' : 'var(--bg-elevated)',
                 border: 'none', cursor: input.trim() && !sending ? 'pointer' : 'default',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
-                transition: 'background 0.2s ease',
+                flexShrink: 0, transition: 'background 0.2s ease',
                 color: input.trim() && !sending ? '#09090B' : 'var(--text-muted)',
                 fontSize: '0.9rem',
               }}
@@ -378,10 +464,21 @@ export default function ChatPage() {
 
       {showPaywall && (
         <UpgradeModal
+          name={advisorName}
+          focusArea={userFocusArea}
+          emotionalPattern={userEmotionalPattern}
           onDismiss={() => setShowPaywall(false)}
-          onUpgrade={() => router.push('/unlock')}
+          onUpgrade={() => router.push('/unlock?source=chat')}
         />
       )}
     </main>
+  )
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense>
+      <ChatPageInner />
+    </Suspense>
   )
 }

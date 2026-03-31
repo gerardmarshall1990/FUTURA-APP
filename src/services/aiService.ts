@@ -33,8 +33,17 @@ import {
   buildAdvisorOpeningMessage,
   INTENT_CLASSIFICATION_PROMPT,
   buildIntentClassificationPrompt,
-  type AdvisorSystemPromptInput,
 } from '@/lib/prompts/advisorPrompt'
+
+import {
+  detectInSessionLooping,
+  countCrossDomainResonance,
+  calculateEscalationTier,
+} from '@/services/chatEscalationService'
+
+import type { FullUserContext } from '@/services/profileOrchestrator'
+import type { PalmFeatures } from '@/services/palmAnalysisService'
+import { buildPalmContext } from '@/services/palmAnalysisService'
 
 import {
   IDENTITY_SUMMARY_SYSTEM_PROMPT,
@@ -52,6 +61,14 @@ import type {
   CurrentState,
   PersonalityTrait,
 } from '@/services/profileNormalizationService'
+
+import {
+  isGenericOutput,
+  buildRegenerationInstruction,
+  hasGenericHook,
+  buildHookRegenerationInstruction,
+  type QualitySignals,
+} from '@/services/outputQualityService'
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +105,35 @@ async function complete(
   return response.choices[0].message.content?.trim() ?? ''
 }
 
+// ─── Quality-gated completion ─────────────────────────────────────────────────
+// Runs a completion, checks for generic output, retries once with a forced
+// personalization instruction if the result fails the quality check.
+// Applied to all primary text surfaces: reading, chat, insights, triggers.
+
+async function completeWithQualityCheck(
+  systemPrompt: string,
+  userPrompt: string,
+  model: 'quality' | 'fast',
+  maxTokens: number,
+  temperature: number,
+  signals: QualitySignals,
+): Promise<string> {
+  const result = await complete(systemPrompt, userPrompt, model, maxTokens, temperature)
+
+  if (isGenericOutput(result, signals)) {
+    const forcePersonalization = buildRegenerationInstruction(signals)
+    return complete(
+      `${forcePersonalization}\n\n${systemPrompt}`,
+      userPrompt,
+      model,
+      maxTokens,
+      temperature,
+    )
+  }
+
+  return result
+}
+
 // ─── Reading Services ─────────────────────────────────────────────────────────
 
 /**
@@ -100,7 +146,11 @@ export async function polishReading(
   cutLine: string,
   identitySummary: string,
   focusArea: FocusArea,
-  futureTheme: string
+  futureTheme: string,
+  palmFeatures?: PalmFeatures | null,
+  name?: string | null,
+  beliefSystem?: string | null,
+  starSign?: string | null,
 ): Promise<{ teaserText: string; cutLine: string; lockedText: string }> {
   const polishInput: PolishPromptInput = {
     teaserRaw,
@@ -108,22 +158,46 @@ export async function polishReading(
     lockedRaw,
     identitySummary,
     focusArea,
+    name: name ?? undefined,
+    beliefSystem: beliefSystem ?? undefined,
+    starSign: starSign ?? undefined,
+    palmContext: palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+  }
+
+  const qualitySignals: QualitySignals = {
+    name:             name ?? null,
+    starSign:         starSign ?? null,
+    corePattern:      null,       // not threaded through polish — identity summary carries it
+    emotionalPattern: null,
+    focusArea:        focusArea,
+    palmFeatures:     palmFeatures ?? null,
   }
 
   const [teaserText, lockedText] = await Promise.all([
-    complete(
+    completeWithQualityCheck(
       READING_POLISH_SYSTEM_PROMPT,
       buildPolishUserPrompt(polishInput),
       'quality',
       600,
-      0.68
+      0.68,
+      qualitySignals,
     ),
-    complete(
+    completeWithQualityCheck(
       LOCKED_POLISH_SYSTEM_PROMPT,
-      buildLockedPolishUserPrompt(lockedRaw, identitySummary, focusArea, futureTheme),
+      buildLockedPolishUserPrompt(
+        lockedRaw,
+        identitySummary,
+        focusArea,
+        futureTheme,
+        palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+        name ?? undefined,
+        beliefSystem ?? undefined,
+        starSign ?? undefined,
+      ),
       'quality',
       400,
-      0.7
+      0.7,
+      qualitySignals,
     ),
   ])
 
@@ -203,11 +277,19 @@ export interface ChatMessage {
  * History is passed in and managed by caller.
  */
 export async function sendAdvisorMessage(
-  ctx: AdvisorSystemPromptInput,
+  ctx: FullUserContext,
   history: ChatMessage[],
-  newMessage: string
+  newMessage: string,
 ): Promise<string> {
-  const systemPrompt = buildAdvisorSystemPrompt(ctx)
+  // ── Escalation tier — derived from session history + cross-session memory ──
+  const escalationTier = calculateEscalationTier({
+    sessionMessageCount:       history.length,
+    crossDomainResonanceCount: countCrossDomainResonance(ctx.memorySnapshot),
+    inSessionLooping:          detectInSessionLooping(history),
+    lifecycleState:            ctx.lifecycleState,
+  })
+
+  const systemPrompt = buildAdvisorSystemPrompt(ctx, escalationTier)
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -220,19 +302,66 @@ export async function sendAdvisorMessage(
     max_tokens: 320,
     temperature: 0.78,
     messages,
-    // Prevent runaway responses
     stop: ['\n\n\n'],
   })
 
-  return response.choices[0].message.content?.trim()
+  const result = response.choices[0].message.content?.trim()
     ?? 'Something interrupted the connection. Please try again.'
+
+  // Quality gate — retry once with forced personalization if output is generic
+  const signals: QualitySignals = {
+    name:             ctx.firstName,
+    starSign:         ctx.starSign,
+    corePattern:      ctx.corePattern,
+    emotionalPattern: ctx.emotionalPattern,
+    focusArea:        ctx.focusArea,
+    palmFeatures:     ctx.palmFeatures,
+  }
+
+  // Quality gate 1 — generic content (no personalization signals)
+  if (isGenericOutput(result, signals)) {
+    const forcePersonalization = buildRegenerationInstruction(signals)
+    const retryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${forcePersonalization}\n\n${systemPrompt}` },
+      ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: newMessage },
+    ]
+    const retry = await openai.chat.completions.create({
+      model: MODELS.fast,
+      max_tokens: 320,
+      temperature: 0.78,
+      messages: retryMessages,
+      stop: ['\n\n\n'],
+    })
+    return retry.choices[0].message.content?.trim() ?? result
+  }
+
+  // Quality gate 2 — generic hook ending (formulaic closing line)
+  if (hasGenericHook(result)) {
+    const hookInstruction = buildHookRegenerationInstruction()
+    const hookRetryMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: `${hookInstruction}\n\n${systemPrompt}` },
+      ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user', content: newMessage },
+    ]
+    const hookRetry = await openai.chat.completions.create({
+      model: MODELS.fast,
+      max_tokens: 320,
+      temperature: 0.82,  // slightly higher temp to break the formulaic pattern
+      messages: hookRetryMessages,
+      stop: ['\n\n\n'],
+    })
+    return hookRetry.choices[0].message.content?.trim() ?? result
+  }
+
+  return result
 }
 
 /**
  * Returns the opening message the advisor sends at the start of a session.
  * This is deterministic (no API call) but uses the advisor prompt system.
  */
-export function getAdvisorOpeningMessage(ctx: AdvisorSystemPromptInput): string {
+export function getAdvisorOpeningMessage(ctx: FullUserContext): string {
   return buildAdvisorOpeningMessage(ctx)
 }
 
@@ -240,6 +369,7 @@ export function getAdvisorOpeningMessage(ctx: AdvisorSystemPromptInput): string 
 
 export interface MemoryTheme {
   key_theme: string
+  memory_type?: 'emotional' | 'behavioral' | 'event'
   description: string
 }
 
@@ -268,13 +398,25 @@ export async function extractMemoryThemes(
     const clean = raw.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (t: unknown) =>
-        t &&
-        typeof t === 'object' &&
-        'key_theme' in (t as object) &&
-        'description' in (t as object)
-    ) as MemoryTheme[]
+    const VALID_TYPES = new Set(['emotional', 'behavioral', 'event'])
+    return parsed
+      .filter(
+        (t: unknown) =>
+          t &&
+          typeof t === 'object' &&
+          'key_theme' in (t as object) &&
+          'description' in (t as object)
+      )
+      .map((t: unknown) => {
+        const theme = t as Record<string, unknown>
+        return {
+          key_theme: theme.key_theme as string,
+          memory_type: VALID_TYPES.has(theme.memory_type as string)
+            ? (theme.memory_type as MemoryTheme['memory_type'])
+            : 'behavioral',
+          description: theme.description as string,
+        }
+      }) as MemoryTheme[]
   } catch {
     return []
   }
@@ -317,12 +459,18 @@ export async function generateDailyInsight(
   futureTheme: string,
   focusArea: FocusArea,
   memoryThemes: MemoryTheme[],
-  daysSinceReading: number
+  daysSinceReading: number,
+  palmFeatures?: PalmFeatures | null,
 ): Promise<string> {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const dayOfWeek = days[new Date().getDay()]
 
-  return complete(
+  const signals: QualitySignals = {
+    focusArea,
+    palmFeatures: palmFeatures ?? null,
+  }
+
+  return completeWithQualityCheck(
     DAILY_INSIGHT_SYSTEM_PROMPT,
     buildDailyInsightPrompt(
       identitySummary,
@@ -330,10 +478,151 @@ export async function generateDailyInsight(
       focusArea,
       memoryThemes,
       dayOfWeek,
-      daysSinceReading
+      daysSinceReading,
+      palmFeatures ? buildPalmContext(palmFeatures) : undefined,
     ),
     'fast',
     200,
-    0.75
+    0.75,
+    signals,
   )
+}
+
+// ─── Follow-Up Prompt Generation ─────────────────────────────────────────────
+
+const FOLLOW_UP_PROMPT_SYSTEM = `You generate follow-up conversation prompts for a personal AI pattern advisor called Futura.
+
+You receive a user message and the advisor's response, which ends with a specific hook.
+
+Generate exactly 3 follow-up prompts the user would naturally type next.
+
+HOOK DETECTION — read the advisor's final sentence to identify the hook type:
+- Deeper layer ("The thing underneath...") → probe that specific layer directly
+- Pattern inversion ("Your pattern makes this feel like X when it's Y") → test or explore the reframe
+- Unresolved surface ("What hasn't been named is...") → approach the unsaid thing
+- Real question redirect ("The real question isn't X — it's Y") → engage with the surfaced real question
+- Continuity echo ("This keeps surfacing because...") → continue that thread
+
+Generate one of each:
+1. DEEPEN — follows the hook angle directly, goes one level deeper into what the response named
+2. CHALLENGE — pushes against or tests the observation (what would make it not true, or the harder version)
+3. ADJACENT — opens a related but unexplored dimension that the current thread is touching
+
+Rules:
+- Each prompt must be specific to this exact conversation — not a generic opener
+- Maximum 12 words per prompt
+- Phrased naturally — how the user would actually type it into a chat
+- No question marks needed
+- FORBIDDEN: "Tell me more", "How does that feel?", "What do you think?", "Help me understand", "Does that resonate?", "Can you explain", any generic conversational prompt
+
+Return valid JSON only: ["deepen prompt", "challenge prompt", "adjacent prompt"]`
+
+/**
+ * Generates 3 context-aware follow-up prompts aligned with the hook used in the response.
+ * Called non-blocking after each advisor turn — response arrives first, prompts appear after.
+ */
+export async function generateFollowUpPrompts(
+  userMessage: string,
+  advisorResponse: string,
+  focusArea: string,
+  emotionalPattern: string,
+  corePattern: string,
+): Promise<string[]> {
+  const userPrompt = `User message: "${userMessage}"
+
+Advisor response: "${advisorResponse}"
+
+User context:
+- Focus area: ${focusArea.replace(/_/g, ' ')}
+- Core pattern: ${corePattern.replace(/_/g, ' ')}
+- Emotional pattern: ${emotionalPattern.replace(/_/g, ' ')}
+
+Generate 3 follow-up prompts.`
+
+  const raw = await complete(FOLLOW_UP_PROMPT_SYSTEM, userPrompt, 'fast', 200, 0.72)
+
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    if (Array.isArray(parsed) && parsed.every((p: unknown) => typeof p === 'string')) {
+      return (parsed as string[]).slice(0, 4).filter(p => p.trim().length > 0)
+    }
+  } catch {
+    // fall through to empty
+  }
+
+  return []
+}
+
+// ─── Lifecycle Trigger Copy ───────────────────────────────────────────────────
+
+export interface TriggerCopy {
+  headline: string
+  subtext: string
+}
+
+const TRIGGER_COPY_SYSTEM_PROMPT = `You are writing personalized re-engagement copy for a palmistry and pattern advisor app called Futura.
+
+You will receive a user's profile and a trigger type. Write ONE headline and ONE subtext line.
+
+Rules:
+- Headline: max 10 words. Specific. References something real about this person.
+- Subtext: max 20 words. Explains what they're missing or what has shifted. Specific to their focus and emotional pattern.
+- Never generic. Never "your journey". Never "the universe". Never motivational.
+- Never "Something shifted" alone — always complete it: "Something shifted in your [specific pattern]"
+- Tone: direct, personal, slightly urgent. Like a trusted advisor leaving a note.
+- Return valid JSON only: {"headline": "...", "subtext": "..."}`
+
+export async function generateTriggerCopy(
+  triggerType: string,
+  firstName: string | null,
+  focusArea: string,
+  emotionalPattern: string,
+  memoryKeys: string[],
+  starSign: string | null,
+  palmFeatures?: PalmFeatures | null,
+): Promise<TriggerCopy> {
+  const name = firstName ?? 'You'
+  const focus = focusArea.replace(/_/g, ' ')
+  const recentMemory = memoryKeys.slice(0, 3).map(k => k.replace(/_/g, ' ')).join(', ')
+
+  // Include palm reading anchor if available — gives the AI a grounded physical signal
+  // to reference in trigger copy without forcing it to re-derive from raw feature text
+  const palmLine = palmFeatures?.reading_anchor
+    ? `Palm reading anchor: ${palmFeatures.reading_anchor}`
+    : ''
+
+  const userPrompt = `Trigger type: ${triggerType}
+Name: ${name}
+Focus area: ${focus}
+Emotional pattern: ${emotionalPattern}
+${starSign ? `Star sign: ${starSign}` : ''}
+${recentMemory ? `Recent behavioral themes: ${recentMemory}` : ''}
+${palmLine}
+
+Write the headline and subtext JSON for this trigger.`
+
+  const signals: QualitySignals = {
+    name:         firstName,
+    focusArea:    focusArea,
+    palmFeatures: palmFeatures ?? null,
+  }
+
+  const raw = await completeWithQualityCheck(
+    TRIGGER_COPY_SYSTEM_PROMPT, userPrompt, 'fast', 120, 0.8, signals
+  )
+
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean) as TriggerCopy
+    if (parsed.headline && parsed.subtext) return parsed
+  } catch {
+    // fall through to fallback
+  }
+
+  // Fallback — still uses user data, just templated
+  return {
+    headline: `${name}, your ${focus} pattern has moved.`,
+    subtext: `A new insight based on your ${emotionalPattern} is ready.`,
+  }
 }

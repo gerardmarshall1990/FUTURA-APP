@@ -39,6 +39,10 @@ export interface PolishPromptInput {
   lockedRaw: string
   identitySummary: string
   focusArea: FocusArea
+  name?: string
+  beliefSystem?: string
+  starSign?: string
+  palmContext?: string
 }
 
 // ─── System Prompts ───────────────────────────────────────────────────────────
@@ -93,6 +97,15 @@ WHAT TO DO:
 - Tighten language — cut filler words ruthlessly
 - Preserve the emotional arc: recognition → validation → present tension → future pressure
 
+PALM FEATURES (if provided):
+- Palm features are a PRIMARY identity anchor — treat with equal weight to behavioral patterns
+- Include 1–2 palm observations in this reading. Make them visual and physical — describe what is actually present in the palm before the behavioral correlation. Example: "The way your heart line curves sharply toward your index finger tends to show up as..." not just "Your emotional pattern shows..."
+- COMBINE features where possible. Do not reference a single signal alone. Example: "Your [elemental] hand alongside the depth of your [line] tends to correlate with..." — this feels undeniable, not generic.
+- Use the reading_anchor as your primary reference — it is the synthesized physical summary of this specific palm. Build any palm reference from it.
+- Probabilistic language only: "tends to...", "often correlates with...", "this tends to show up as..."
+- NEVER say "your palm says" or "your palm predicts" — use "the depth of your heart line tends to..." or "the combination of your [shape] hand and [line] often shows up as..."
+- If there is tension between a palm observation and what the reading states: "this can show up differently depending on your current phase"
+
 WHAT NOT TO DO:
 - Do not change the meaning of any paragraph
 - Do not add new claims or content not in the original
@@ -116,6 +129,14 @@ WHAT TO DO:
 - Include a sense of timing or window ("this next period", "the coming weeks", "what you do next")
 - End with one line that creates forward motion — not a motivational quote, but a precise observation about what the user's pattern predicts they will or should do
 - Keep it 2–3 tight paragraphs maximum
+
+PALM FEATURES (if provided):
+- Include ONE specific palm observation in this deeper layer — this is where a well-placed palm reference has the highest impact
+- Make it visual and physical: describe what is observed first, then the behavioral correlation. Example: "The way your life line holds its depth through the lower arc tends to correlate with..." not just "Your energy pattern suggests..."
+- Combine features where possible: "Your [elemental] hand alongside [line feature] tends to..." feels more undeniable than a single signal alone
+- Use the reading_anchor as your primary reference point
+- Probabilistic language only — "tends to...", "often shows up as..."
+- If palm and pattern tension: "this can show up differently depending on your current phase"
 
 WHAT NOT TO DO:
 - Do not repeat what the teaser already said
@@ -170,15 +191,25 @@ The reading should feel as though it could only have been written for this speci
 }
 
 export function buildPolishUserPrompt(input: PolishPromptInput): string {
+  const personalContext = [
+    input.name ? `Name: ${input.name}` : null,
+    input.starSign ? `Star sign: ${input.starSign}` : null,
+    input.beliefSystem ? `Belief system: ${input.beliefSystem}` : null,
+  ].filter(Boolean).join('\n')
+
   return `Here is the reading assembled from blocks. Polish it into a cohesive, flowing piece.
 
 IDENTITY CONTEXT (do not repeat directly, but let it inform the voice):
 ${input.identitySummary}
 
-FOCUS AREA: ${input.focusArea.replace('_', ' ')}
+${personalContext ? `PERSONAL CONTEXT:\n${personalContext}\n` : ''}FOCUS AREA: ${input.focusArea.replace('_', ' ')}
 
-RAW READING:
+${input.palmContext ? `${input.palmContext}\n` : ''}RAW READING:
 ${input.teaserRaw}
+
+${input.name ? `Use the name "${input.name}" once naturally in the reading — not as the first word, but placed where it feels personal and direct.` : ''}
+${input.beliefSystem ? `Adapt the language tone to resonate with their ${input.beliefSystem} worldview without being heavy-handed.` : ''}
+${input.palmContext ? `Reference specific palm features (heart line, head line, hand shape, etc.) where they genuinely connect to the reading content. Do not force palm references — use them where they add precision.` : ''}
 
 Polish this now. Return only the polished paragraphs.`
 }
@@ -187,17 +218,33 @@ export function buildLockedPolishUserPrompt(
   lockedRaw: string,
   identitySummary: string,
   focusArea: FocusArea,
-  futureTheme: string
+  futureTheme: string,
+  palmContext?: string,
+  name?: string,
+  beliefSystem?: string,
+  starSign?: string,
 ): string {
+  const personalContext = [
+    name        ? `Name: ${name}`                   : null,
+    starSign    ? `Star sign: ${starSign}`           : null,
+    beliefSystem ? `Belief system: ${beliefSystem}` : null,
+  ].filter(Boolean).join('\n')
+
   return `Here is the locked deeper continuation to polish.
 
 CONTEXT:
 Identity: ${identitySummary}
 Focus: ${focusArea.replace('_', ' ')}
 Current movement: ${futureTheme}
+${personalContext ? `\nPERSONAL CONTEXT:\n${personalContext}` : ''}
 
-RAW LOCKED CONTINUATION:
+${palmContext ? `${palmContext}\n` : ''}RAW LOCKED CONTINUATION:
 ${lockedRaw}
+
+${name ? `Use the name "${name}" once in this deeper layer if it fits naturally.` : ''}
+${beliefSystem ? `The language tone should resonate with their ${beliefSystem} worldview.` : ''}
+${palmContext ? `You may reference a specific palm feature once to anchor what is building.` : ''}
 
 Polish this into the deeper layer. Return only the polished paragraphs.`
 }
+

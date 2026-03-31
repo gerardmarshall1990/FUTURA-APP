@@ -9,7 +9,14 @@ function FullReadingPage() {
   const router = useRouter()
   const params = useSearchParams()
   const { userId, setUnlocked } = useSessionStore()
-  const [reading, setReading] = useState<any>(null)
+  const [reading, setReading] = useState<{
+    teaserText?: string
+    lockedText?: string
+    cutLine?: string
+    isUnlocked?: boolean
+    firstName?: string | null
+    focusArea?: string | null
+  } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
