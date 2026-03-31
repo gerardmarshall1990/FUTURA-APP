@@ -43,12 +43,27 @@ export async function POST(req: NextRequest) {
     const publicUrl = urlData.publicUrl
 
     // ── 3. Run vision analysis ─────────────────────────────────────────────────
-    let features
+    let features = null
+    let quality: 'good' | 'okay' | 'bad' = 'good'
+    let qualityFeedback = ''
+
     try {
       features = await analyzePalm(publicUrl)
+
+      // Determine quality from line_clarity — accept-by-default
+      if (features.line_clarity === 'deep' || features.line_clarity === 'medium') {
+        quality = 'good'
+      } else {
+        // faint or mixed — still usable, just warn
+        quality = 'okay'
+        qualityFeedback = 'Lines are faint — try better lighting for the most accurate reading'
+      }
     } catch (analysisErr) {
       console.error('[palm/analyze] vision error:', analysisErr)
-      return NextResponse.json({ error: 'Palm analysis failed. Please try a clearer image.' }, { status: 422 })
+      // Do NOT return 422 — still return the uploaded image URL
+      // so the client can decide to retry or continue
+      quality = 'bad'
+      qualityFeedback = 'Could not read palm lines clearly — try more light or move closer'
     }
 
     // ── 4. Store features + URL in user_profiles ───────────────────────────────
@@ -58,17 +73,17 @@ export async function POST(req: NextRequest) {
         {
           user_id: userId,
           palm_image_url: publicUrl,
-          palm_features_json: features,
+          ...(features ? { palm_features_json: features } : {}),
         },
         { onConflict: 'user_id' }
       )
 
     if (dbError) {
       console.error('[palm/analyze] db error:', dbError)
-      // Non-fatal — return features even if store fails
+      // Non-fatal — return result even if store fails
     }
 
-    return NextResponse.json({ publicUrl, features })
+    return NextResponse.json({ publicUrl, features, quality, feedback: qualityFeedback })
   } catch (err) {
     console.error('[palm/analyze]', err)
     return NextResponse.json({ error: 'Palm analysis failed' }, { status: 500 })

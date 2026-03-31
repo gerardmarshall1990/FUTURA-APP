@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, ProgressBar, PremiumButton, Orb } from '@/components/shared'
 import { useOnboardingStore, useSessionStore } from '@/store'
@@ -434,200 +434,443 @@ function BeliefScreen({ onNext }: { onNext: () => void }) {
   )
 }
 
-// ─── Palm Upload Screen ───────────────────────────────────────────────────────
+// ─── Palm Scan Screen ─────────────────────────────────────────────────────────
 
-type PalmStatus = 'idle' | 'uploading' | 'analyzing' | 'done' | 'error'
+type ScanPhase    = 'start' | 'camera' | 'processing' | 'result'
+type CameraSignal = 'ready' | 'good' | 'warn' | 'dark' | 'bright'
+type ScanQuality  = 'good' | 'okay' | 'bad'
+
+function palmDelay(ms: number) { return new Promise<void>(r => setTimeout(r, ms)) }
+
+const SIGNAL_COLOR: Record<CameraSignal, string> = {
+  ready:  'rgba(201,169,110,0.55)',
+  good:   '#3ecf8e',
+  warn:   '#f59e0b',
+  dark:   '#ef4444',
+  bright: '#f59e0b',
+}
+
+const SIGNAL_TEXT: Record<CameraSignal, string> = {
+  ready:  'Place your palm inside the frame',
+  good:   'Tap to capture',
+  warn:   'Move closer · keep fingers visible',
+  dark:   'Need more light',
+  bright: 'Move away from bright light',
+}
+
+const PROCESSING_STEPS = ['Detecting palm', 'Checking clarity', 'Mapping lines']
 
 function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumber: number }) {
   const { setPalmImage, palmPreviewUrl } = useOnboardingStore()
   const { userId } = useSessionStore()
-  const cameraRef = useRef<HTMLInputElement>(null)
-  const galleryRef = useRef<HTMLInputElement>(null)
-  const [dragging, setDragging] = useState(false)
-  const [status, setStatus] = useState<PalmStatus>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) return
-    setStatus('uploading')
-    setErrorMsg('')
+  const [phase,         setPhase]         = useState<ScanPhase>('start')
+  const [signal,        setSignal]        = useState<CameraSignal>('ready')
+  const [procStep,      setProcStep]      = useState(0)
+  const [scanQuality,   setScanQuality]   = useState<ScanQuality | null>(null)
+  const [feedback,      setFeedback]      = useState('')
+  const [retakeCount,   setRetakeCount]   = useState(0)
+  const [cameraBlocked, setCameraBlocked] = useState(false)
 
-    const preview = URL.createObjectURL(file)
-    setPalmImage(preview, preview)
+  const videoRef     = useRef<HTMLVideoElement>(null)
+  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const streamRef    = useRef<MediaStream | null>(null)
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+  const galleryRef   = useRef<HTMLInputElement>(null)
 
-    setStatus('analyzing')
-    try {
-      const fd = new FormData()
-      fd.append('palm', file)
-      fd.append('userId', userId ?? '')
-
-      const res = await fetch('/api/palm/analyze', { method: 'POST', body: fd })
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: 'Analysis failed' }))
-        throw new Error(error)
-      }
-      const { publicUrl } = await res.json()
-      setPalmImage(publicUrl, preview)
-      setStatus('done')
-    } catch (err) {
-      setErrorMsg((err as Error).message ?? 'Analysis failed')
-      setStatus('error')
+  // Attach stream after camera phase renders the video element
+  useEffect(() => {
+    if (phase === 'camera' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(() => {})
     }
-  }, [setPalmImage, userId])
+  }, [phase])
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+  // Stop camera when leaving the screen
+  useEffect(() => () => stopStream(), [])
+
+  function stopStream() {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
   }
 
-  const isAnalyzing = status === 'uploading' || status === 'analyzing'
-  const canContinue = status === 'done'
-  const showCapture = !palmPreviewUrl || status === 'error'
+  async function openCamera() {
+    setCameraBlocked(false)
+    if (!navigator.mediaDevices?.getUserMedia) { setCameraBlocked(true); return }
+    try {
+      let stream: MediaStream
+      // Prefer rear/environment camera on mobile; fall back to any camera (desktop webcam)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        })
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      }
+      streamRef.current = stream
+      setPhase('camera')
+      timerRef.current = setInterval(analyzeFrame, 800)
+    } catch {
+      setCameraBlocked(true)
+    }
+  }
 
-  return (
-    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
-      <div>
-        <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 300, letterSpacing: '-0.01em', marginBottom: '0.6rem' }}>
-          Scan your palm
-        </h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.65 }}>
-          Hold your dominant hand flat, palm facing up in good light. Your lines are the anchor of your reading.
-        </p>
-      </div>
+  function analyzeFrame() {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas || video.readyState < 2 || !video.videoWidth) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
 
-      {/* Preview area — shown once a photo is selected */}
-      {palmPreviewUrl && !showCapture && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          style={{
-            position: 'relative', minHeight: 220,
-            border: `1px solid ${canContinue ? 'rgba(201,169,110,0.4)' : 'rgba(201,169,110,0.15)'}`,
-            borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
-            background: 'var(--bg-card)',
-          }}
-        >
-          <img
-            src={palmPreviewUrl}
-            alt="Palm preview"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0, opacity: isAnalyzing ? 0.3 : 0.6 }}
-          />
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {isAnalyzing ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(201,169,110,0.15)', borderTopColor: 'var(--gold)', animation: 'rotate-slow 1s linear infinite' }} />
-                <span style={{ background: 'rgba(9,9,11,0.8)', backdropFilter: 'blur(8px)', padding: '5px 14px', borderRadius: '100px', color: 'var(--gold)', fontSize: '0.78rem', letterSpacing: '0.05em' }}>
-                  Reading your palm lines...
-                </span>
-              </div>
-            ) : (
-              <div style={{ background: 'rgba(9,9,11,0.75)', backdropFilter: 'blur(8px)', padding: '6px 16px', borderRadius: '100px' }}>
-                <span style={{ color: 'var(--gold)', fontSize: '0.8rem', letterSpacing: '0.06em' }}>✓ Palm analyzed</span>
-              </div>
-            )}
-          </div>
+    canvas.width  = video.videoWidth
+    canvas.height = video.videoHeight
+    ctx.drawImage(video, 0, 0)
+
+    // Sample center 40% of frame
+    const sw = Math.max(1, Math.floor(canvas.width  * 0.4))
+    const sh = Math.max(1, Math.floor(canvas.height * 0.4))
+    const sx = Math.floor((canvas.width  - sw) / 2)
+    const sy = Math.floor((canvas.height - sh) / 2)
+    const d  = ctx.getImageData(sx, sy, sw, sh).data
+    const n  = sw * sh
+    let r = 0, g = 0, b = 0
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2] }
+    r /= n; g /= n; b /= n
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b
+
+    if      (lum < 30)                                          setSignal('dark')
+    else if (lum > 230)                                         setSignal('bright')
+    else if (r > 100 && r > g * 1.07 && g > 60 && g > b * 0.88) setSignal('good')
+    else                                                        setSignal('warn')
+  }
+
+  async function capture() {
+    const video  = videoRef.current
+    const canvas = canvasRef.current
+    if (!video || !canvas) return
+    canvas.width  = video.videoWidth  || 1280
+    canvas.height = video.videoHeight || 720
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    stopStream()
+    canvas.toBlob(blob => { if (blob) processImage(blob) }, 'image/jpeg', 0.92)
+  }
+
+  async function processImage(data: Blob | File) {
+    const preview = URL.createObjectURL(data)
+    setPalmImage(preview, preview)
+    setPhase('processing')
+    setProcStep(0); await palmDelay(650)
+    setProcStep(1); await palmDelay(650)
+    setProcStep(2); await palmDelay(800)
+    await uploadAndAnalyze(data, preview)
+  }
+
+  async function uploadAndAnalyze(data: Blob | File, preview: string) {
+    try {
+      const fd = new FormData()
+      fd.append('palm', data, 'palm.jpg')
+      fd.append('userId', userId ?? '')
+      const res  = await fetch('/api/palm/analyze', { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+
+      // Hard failure — storage broken or network error
+      if (!res.ok && res.status !== 422 && res.status !== 200) {
+        setScanQuality('bad')
+        setFeedback(json.error ?? 'Upload failed — check your connection')
+        setPhase('result')
+        return
+      }
+
+      const quality: ScanQuality = json.quality ?? (res.ok ? 'good' : 'bad')
+      if (json.publicUrl) setPalmImage(json.publicUrl, preview)
+      setScanQuality(quality)
+      setFeedback(json.feedback ?? '')
+      setPhase('result')
+      if (quality === 'good') { await palmDelay(800); onNext() }
+    } catch {
+      setScanQuality('bad')
+      setFeedback('Check your connection and try again')
+      setPhase('result')
+    }
+  }
+
+  function doRetake() {
+    setRetakeCount(c => c + 1)
+    setScanQuality(null)
+    setFeedback('')
+    setProcStep(0)
+    setPalmImage('', '')
+    stopStream()
+    setSignal('ready')
+    setPhase('start')
+  }
+
+  // ── Phase: start ─────────────────────────────────────────────────────────────
+  if (phase === 'start') return (
+    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
+      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 300, letterSpacing: '-0.01em', marginBottom: '0.5rem' }}>
+        Scan your palm
+      </h2>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.65, marginBottom: '1.8rem' }}>
+        Your palm lines are the anchor of your reading. Hold your dominant hand flat, fingers spread.
+      </p>
+
+      {/* Camera CTA */}
+      <button type="button" onClick={openCamera} style={{
+        width: '100%', padding: '18px 16px',
+        background: 'rgba(201,169,110,0.07)',
+        border: '1px solid rgba(201,169,110,0.35)',
+        borderRadius: '16px', marginBottom: '10px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: '14px',
+        transition: 'all 0.2s',
+      }}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(201,169,110,0.12)', border: '1px solid rgba(201,169,110,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ fontSize: '20px' }}>✋</span>
         </div>
-      )}
-
-      {/* Capture buttons — shown when no image selected or on error */}
-      {showCapture && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-          style={{
-            display: 'flex', flexDirection: 'column', gap: '10px',
-            padding: dragging ? '20px' : '0',
-            border: dragging ? '1px dashed rgba(201,169,110,0.5)' : '1px dashed transparent',
-            borderRadius: 'var(--radius-lg)',
-            transition: 'all 0.2s',
-          }}
-        >
-          {status === 'error' && (
-            <div style={{ background: 'rgba(255,80,80,0.07)', border: '1px solid rgba(255,80,80,0.2)', borderRadius: '10px', padding: '10px 14px', marginBottom: '4px' }}>
-              <p style={{ color: 'rgba(255,120,120,0.8)', fontSize: '0.8rem', fontFamily: 'var(--font-body)', margin: 0 }}>
-                {errorMsg || 'Analysis failed — try a clearer image in good light'}
-              </p>
-            </div>
-          )}
-
-          {/* Primary: camera */}
-          <button
-            type="button"
-            onClick={() => cameraRef.current?.click()}
-            style={{
-              width: '100%', padding: '16px',
-              background: 'rgba(201,169,110,0.08)',
-              border: '1px solid rgba(201,169,110,0.32)',
-              borderRadius: '14px',
-              fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600,
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: '#C9A96E', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-              transition: 'all 0.2s',
-            }}
-          >
-            <span style={{ fontSize: '18px' }}>📷</span>
-            Scan palm now
-          </button>
-
-          {/* Secondary: gallery */}
-          <button
-            type="button"
-            onClick={() => galleryRef.current?.click()}
-            style={{
-              width: '100%', padding: '14px',
-              background: 'transparent',
-              border: '1px solid rgba(201,169,110,0.13)',
-              borderRadius: '14px',
-              fontFamily: 'var(--font-body)', fontSize: '12px', fontWeight: 400,
-              letterSpacing: '0.05em',
-              color: 'rgba(240,235,225,0.4)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              transition: 'all 0.2s',
-            }}
-          >
-            <span style={{ fontSize: '15px' }}>↑</span>
-            Upload existing photo
-          </button>
-
-          {dragging && (
-            <p style={{ textAlign: 'center', color: 'rgba(201,169,110,0.55)', fontSize: '0.8rem', fontFamily: 'var(--font-body)' }}>
-              Drop your palm photo here
-            </p>
-          )}
+        <div style={{ textAlign: 'left' }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em', color: '#C9A96E', margin: 0 }}>Scan palm now</p>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '10.5px', color: 'rgba(240,235,225,0.35)', margin: '2px 0 0', letterSpacing: '0.02em' }}>Opens in-app camera · guided</p>
         </div>
-      )}
+        <span style={{ marginLeft: 'auto', color: 'rgba(201,169,110,0.45)', fontSize: '16px' }}>›</span>
+      </button>
 
-      {/* Hidden file inputs */}
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
+      {/* Upload fallback */}
+      <button type="button" onClick={() => galleryRef.current?.click()} style={{
+        width: '100%', padding: '13px 16px', background: 'transparent',
+        border: '1px solid rgba(201,169,110,0.1)', borderRadius: '14px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        transition: 'all 0.2s',
+      }}>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'rgba(240,235,225,0.38)', letterSpacing: '0.04em' }}>
+          Upload existing photo instead
+        </span>
+      </button>
       <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) processImage(f); e.target.value = '' }} />
 
-      {/* Retake option when done */}
-      {canContinue && (
-        <button
-          type="button"
-          onClick={() => { setStatus('idle'); setPalmImage('', '') }}
-          style={{ background: 'none', border: 'none', color: 'rgba(240,235,225,0.25)', fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'var(--font-body)', padding: '0', letterSpacing: '0.03em', marginTop: '-8px' }}
-        >
-          Retake photo
-        </button>
+      {cameraBlocked && (
+        <div style={{ marginTop: '12px', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px', padding: '10px 14px' }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'rgba(245,158,11,0.85)', margin: 0, lineHeight: 1.5 }}>
+            Camera access denied. Use "Upload existing photo" or allow camera in your browser settings.
+          </p>
+        </div>
       )}
 
-      <PremiumButton onClick={onNext} disabled={!canContinue} loading={isAnalyzing} size="lg">
-        {canContinue ? 'Continue' : isAnalyzing ? 'Analyzing your palm...' : 'Capture your palm to continue'}
-      </PremiumButton>
-
-      <p style={{ textAlign: 'center', fontSize: '0.68rem', color: 'rgba(240,235,225,0.2)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>
+      <div style={{ flex: 1 }} />
+      <p style={{ textAlign: 'center', fontSize: '0.68rem', color: 'rgba(240,235,225,0.18)', fontFamily: 'var(--font-body)', letterSpacing: '0.04em' }}>
         Your palm is the foundation of your reading — it cannot be skipped
       </p>
+    </div>
+  )
+
+  // ── Phase: camera ─────────────────────────────────────────────────────────────
+  if (phase === 'camera') {
+    const borderCol = SIGNAL_COLOR[signal]
+    const signalText = SIGNAL_TEXT[signal]
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
+        <p style={{ ...stepTag, marginBottom: '10px' }}>Step {stepNumber} of 7 — Your palm</p>
+
+        {/* Camera viewport */}
+        <div style={{
+          position: 'relative', width: '100%', aspectRatio: '3/4',
+          borderRadius: '18px', overflow: 'hidden',
+          border: `1.5px solid ${borderCol}`,
+          boxShadow: `0 0 24px ${borderCol}33`,
+          background: '#000',
+          transition: 'border-color 0.4s, box-shadow 0.4s',
+          flexShrink: 0,
+        }}>
+          {/* Live video stream */}
+          <video ref={videoRef} playsInline muted style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover',
+          }} />
+
+          {/* Hidden canvas for frame analysis + capture */}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+          {/* Viewfinder overlay */}
+          <svg
+            viewBox="0 0 300 400"
+            width="100%" height="100%"
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* Corner brackets */}
+            {[
+              'M 48 20 L 20 20 L 20 60',  // top-left
+              'M 252 20 L 280 20 L 280 60', // top-right
+              'M 48 380 L 20 380 L 20 340', // bottom-left
+              'M 252 380 L 280 380 L 280 340', // bottom-right
+            ].map((d, i) => (
+              <path key={i} d={d} fill="none" stroke={borderCol} strokeWidth="2.5" strokeLinecap="round"
+                style={{ transition: 'stroke 0.4s' }} />
+            ))}
+            {/* Palm guide oval */}
+            <ellipse cx="150" cy="200" rx="90" ry="115" fill="none"
+              stroke={borderCol} strokeWidth="1" strokeDasharray="6 4" opacity="0.45"
+              style={{ transition: 'stroke 0.4s' }} />
+          </svg>
+
+          {/* Signal badge */}
+          <div style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+            background: 'rgba(8,7,6,0.82)', backdropFilter: 'blur(12px)',
+            padding: '6px 16px', borderRadius: '100px',
+            border: `1px solid ${borderCol}55`,
+            display: 'flex', alignItems: 'center', gap: '7px',
+            transition: 'all 0.3s', whiteSpace: 'nowrap',
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: borderCol, display: 'inline-block', transition: 'background 0.3s' }} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '11.5px', color: 'rgba(240,235,225,0.82)', letterSpacing: '0.04em' }}>
+              {signalText}
+            </span>
+          </div>
+        </div>
+
+        {/* Capture + cancel row */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginTop: '20px' }}>
+          {/* Cancel */}
+          <button type="button" onClick={() => { stopStream(); setPhase('start') }} style={{
+            background: 'none', border: '1px solid rgba(201,169,110,0.15)', borderRadius: '50%',
+            width: 44, height: 44, cursor: 'pointer', color: 'rgba(240,235,225,0.35)', fontSize: '18px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} aria-label="Cancel">✕</button>
+
+          {/* Capture shutter */}
+          <button type="button" onClick={capture} aria-label="Capture" style={{
+            width: 68, height: 68, borderRadius: '50%',
+            background: 'rgba(201,169,110,0.12)',
+            border: `3px solid ${SIGNAL_COLOR[signal]}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: `0 0 20px ${SIGNAL_COLOR[signal]}44`,
+            transition: 'all 0.3s',
+          }}>
+            <div style={{ width: 46, height: 46, borderRadius: '50%', background: SIGNAL_COLOR[signal], transition: 'background 0.3s' }} />
+          </button>
+
+          {/* Upload fallback (right of shutter) */}
+          <button type="button" onClick={() => { stopStream(); setPhase('start'); setTimeout(() => galleryRef.current?.click(), 50) }} style={{
+            background: 'none', border: '1px solid rgba(201,169,110,0.15)', borderRadius: '50%',
+            width: 44, height: 44, cursor: 'pointer', color: 'rgba(240,235,225,0.35)', fontSize: '15px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }} aria-label="Upload from gallery">↑</button>
+        </div>
+
+        <p style={{ textAlign: 'center', marginTop: '10px', fontFamily: 'var(--font-body)', fontSize: '10px', color: 'rgba(240,235,225,0.22)', letterSpacing: '0.04em' }}>
+          Align palm · keep fingers visible · tap to capture
+        </p>
+      </div>
+    )
+  }
+
+  // ── Phase: processing ─────────────────────────────────────────────────────────
+  if (phase === 'processing') return (
+    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
+      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+
+      <div style={{
+        position: 'relative', width: '100%', aspectRatio: '3/4',
+        borderRadius: '18px', overflow: 'hidden',
+        border: '1px solid rgba(201,169,110,0.2)',
+        background: '#000', flexShrink: 0,
+      }}>
+        {palmPreviewUrl && (
+          <img src={palmPreviewUrl} alt="Palm" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.4 }} />
+        )}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '22px' }}>
+          {/* Spinner */}
+          <div style={{ width: 52, height: 52, borderRadius: '50%', border: '2px solid rgba(201,169,110,0.1)', borderTopColor: '#C9A96E', animation: 'rotate-slow 1s linear infinite' }} />
+          {/* Steps */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+            {PROCESSING_STEPS.map((label, i) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '9px', opacity: i <= procStep ? 1 : 0.2, transition: 'opacity 0.5s' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: i < procStep ? '#3ecf8e' : i === procStep ? '#C9A96E' : 'rgba(201,169,110,0.3)', transition: 'background 0.4s' }} />
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: i === procStep ? '#C9A96E' : i < procStep ? 'rgba(62,207,142,0.8)' : 'rgba(240,235,225,0.3)', letterSpacing: '0.06em', transition: 'color 0.4s' }}>
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Phase: result ─────────────────────────────────────────────────────────────
+  const canForcePass = retakeCount >= 1  // after 1 forced retry, never block again
+
+  const resultConfig = {
+    good:  { color: '#3ecf8e', icon: '✓', label: 'Palm captured' },
+    okay:  { color: '#f59e0b', icon: '◐', label: 'Captured — quality could be better' },
+    bad:   { color: '#ef4444', icon: '✕', label: feedback || 'Could not read palm clearly' },
+  }
+  const rc = resultConfig[scanQuality ?? 'okay']
+
+  return (
+    <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
+      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+
+      <div style={{
+        position: 'relative', width: '100%', aspectRatio: '3/4',
+        borderRadius: '18px', overflow: 'hidden',
+        border: `1.5px solid ${rc.color}55`,
+        background: '#000', flexShrink: 0,
+      }}>
+        {palmPreviewUrl && (
+          <img src={palmPreviewUrl} alt="Palm" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} />
+        )}
+        {/* Result badge */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(to top, rgba(8,7,6,0.95) 0%, transparent 100%)', padding: '32px 20px 18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '20px', color: rc.color }}>{rc.icon}</span>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'rgba(240,235,225,0.85)', letterSpacing: '0.03em' }}>{rc.label}</span>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+        {/* GOOD: auto-advancing, show passive confirmation */}
+        {scanQuality === 'good' && (
+          <div style={{ textAlign: 'center', padding: '10px', color: '#3ecf8e', fontFamily: 'var(--font-body)', fontSize: '12px', letterSpacing: '0.06em' }}>
+            Continuing...
+          </div>
+        )}
+
+        {/* OKAY: proceed or retake */}
+        {scanQuality === 'okay' && (
+          <>
+            <PremiumButton onClick={onNext} size="lg">Continue anyway</PremiumButton>
+            <button type="button" onClick={doRetake} style={{ background: 'none', border: '1px solid rgba(201,169,110,0.15)', borderRadius: '100px', padding: '12px', fontFamily: 'var(--font-body)', fontSize: '12px', color: 'rgba(240,235,225,0.4)', cursor: 'pointer', letterSpacing: '0.05em' }}>
+              Retake for better results
+            </button>
+            {feedback && <p style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '11px', color: 'rgba(245,158,11,0.6)', marginTop: '2px' }}>{feedback}</p>}
+          </>
+        )}
+
+        {/* BAD: forced retake first time, allow pass after */}
+        {scanQuality === 'bad' && (
+          <>
+            {canForcePass && (
+              <PremiumButton onClick={onNext} size="lg">Continue anyway</PremiumButton>
+            )}
+            <button type="button" onClick={doRetake} style={{
+              background: canForcePass ? 'none' : 'rgba(201,169,110,0.07)',
+              border: `1px solid ${canForcePass ? 'rgba(201,169,110,0.15)' : 'rgba(201,169,110,0.3)'}`,
+              borderRadius: '100px', padding: '14px',
+              fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: canForcePass ? 400 : 600,
+              color: canForcePass ? 'rgba(240,235,225,0.4)' : '#C9A96E', cursor: 'pointer', letterSpacing: '0.05em',
+            }}>
+              {canForcePass ? 'Try again' : 'Retake — get a clearer shot'}
+            </button>
+            {feedback && <p style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '11px', color: 'rgba(239,68,68,0.6)', marginTop: '2px' }}>{feedback}</p>}
+          </>
+        )}
+      </div>
     </div>
   )
 }
