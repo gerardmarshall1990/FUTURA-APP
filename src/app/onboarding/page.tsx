@@ -130,7 +130,7 @@ function NameScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
-      <p style={stepTag}>Step 1 of 7 — Who are you?</p>
+      <p style={stepTag}>Step 1 of 8 — Who are you?</p>
       <h2 style={qHead}>
         What do we call you,{' '}
         <em style={{ fontStyle: 'italic', color: '#C9A96E' }}>seeker?</em>
@@ -316,7 +316,7 @@ function DobScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
-      <p style={stepTag}>Step 2 of 7 — Your birth</p>
+      <p style={stepTag}>Step 2 of 8 — Your birth</p>
       <h2 style={qHead}>
         When did you arrive{' '}
         <em style={{ fontStyle: 'italic', color: '#C9A96E' }}>in this world?</em>
@@ -381,7 +381,7 @@ function BeliefScreen({ onNext }: { onNext: () => void }) {
 
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
-      <p style={stepTag}>Step 3 of 7 — Your world view</p>
+      <p style={stepTag}>Step 3 of 8 — Your world view</p>
       <h2 style={qHead}>
         How do you understand{' '}
         <em style={{ fontStyle: 'italic', color: '#C9A96E' }}>the world?</em>
@@ -621,7 +621,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
   // ── Phase: start ─────────────────────────────────────────────────────────────
   if (phase === 'start') return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '1rem' }}>
-      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+      <p style={stepTag}>Step {stepNumber} of 8 — Your palm</p>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 300, letterSpacing: '-0.01em', marginBottom: '0.5rem' }}>
         Scan your palm
       </h2>
@@ -683,7 +683,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
     const signalText = SIGNAL_TEXT[signal]
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
-        <p style={{ ...stepTag, marginBottom: '10px' }}>Step {stepNumber} of 7 — Your palm</p>
+        <p style={{ ...stepTag, marginBottom: '10px' }}>Step {stepNumber} of 8 — Your palm</p>
 
         {/* Camera viewport */}
         <div style={{
@@ -782,7 +782,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
   // ── Phase: processing ─────────────────────────────────────────────────────────
   if (phase === 'processing') return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
-      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+      <p style={stepTag}>Step {stepNumber} of 8 — Your palm</p>
 
       <div style={{
         position: 'relative', width: '100%', aspectRatio: '3/4',
@@ -824,7 +824,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
 
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingTop: '0.5rem' }}>
-      <p style={stepTag}>Step {stepNumber} of 7 — Your palm</p>
+      <p style={stepTag}>Step {stepNumber} of 8 — Your palm</p>
 
       <div style={{
         position: 'relative', width: '100%', aspectRatio: '3/4',
@@ -915,7 +915,7 @@ function QuestionScreen({ question, options, selected, onSelect, onNext, stepNum
 }) {
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
-      <p style={stepTag}>Step {stepNumber} of 7</p>
+      <p style={stepTag}>Step {stepNumber} of 8</p>
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', fontWeight: 300, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
         {question}
       </h2>
