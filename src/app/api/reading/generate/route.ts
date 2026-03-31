@@ -52,6 +52,8 @@ export async function POST(req: NextRequest) {
       profile.first_name ?? null,
       profile.belief_system ?? null,
       profile.star_sign ?? null,
+      profile.core_pattern ?? null,
+      profile.emotional_pattern ?? null,
     )
 
     const fullText = [polished.teaserText, polished.cutLine, polished.lockedText]

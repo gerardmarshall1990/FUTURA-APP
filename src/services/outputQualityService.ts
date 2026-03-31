@@ -81,8 +81,20 @@ export function isGenericOutput(text: string, signals: QualitySignals): boolean 
   )
   if (!hasAnySignal) return false
 
+  // Focus-area specific language — a valid personalization signal
+  // (a reading that addresses the user's specific focus is not generic)
+  const focusAreaTerms: Record<string, string[]> = {
+    love:           ['relationship', 'relational', 'emotional pattern', 'connection', 'attachment', 'love'],
+    money:          ['financial', 'opportunity', 'resource', 'money', 'income', 'timing window', 'economic'],
+    life_direction: ['direction', 'path', 'purpose', 'life path', 'pattern is moving', 'shift'],
+  }
+  const hasFocusSignal = signals.focusArea
+    ? (focusAreaTerms[signals.focusArea] ?? []).some(t => lower.includes(t))
+    : false
+
   // At least one signal must appear in the output
   const hasPersonalization =
+    hasFocusSignal ||
     (signals.name ? lower.includes(signals.name.toLowerCase()) : false) ||
     (signals.starSign ? lower.includes(signals.starSign.toLowerCase()) : false) ||
     (signals.corePattern ? lower.includes(signals.corePattern.replace(/_/g, ' ')) : false) ||
