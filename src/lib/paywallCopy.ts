@@ -122,9 +122,9 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
         subtext:  subtext[rawFocus] ?? subtext.life_direction,
         withheldLabel:        'The reading breaks here — mid-sentence, deliberately',
         withheldText:         cutLine ?? undefined,
-        withheldContinuation: 'The line above was left open. What follows names what it was building toward.',
+        withheldContinuation: 'The sentence above ends where it does deliberately. What follows names what it was building toward.',
         urgencyLine:  readingUrgency,
-        ctaUnlock:    'Finish the reading',
+        ctaUnlock:    'Continue my reading',
         ctaSub:       'Finish reading + daily insight',
         unlockFeatures: [
           `What your pattern predicts for your ${f} in the coming weeks`,
@@ -152,7 +152,7 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
         withheldText:         cutLine ?? undefined,
         withheldContinuation: 'Same point. Still waiting.',
         urgencyLine:  readingUrgency,
-        ctaUnlock:    'Finish it',
+        ctaUnlock:    'See what this leads to',
         ctaSub:       'Finish reading + daily insight',
         unlockFeatures: [
           `What your pattern predicts for your ${f}`,
@@ -178,9 +178,9 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
       subtext:  subtext[rawFocus] ?? subtext.life_direction,
       withheldLabel:        'Still here. Still unread.',
       withheldText:         cutLine ?? undefined,
-      withheldContinuation: 'You already know something in this reading is unresolved.',
+      withheldContinuation: 'The reading stopped at exactly the point where it was about to name the thing you came here for.',
       urgencyLine:  readingUrgency,
-      ctaUnlock:    'Finish it this time',
+      ctaUnlock:    'Finish what started here',
       ctaSub:       'Finish reading + daily insight',
       unlockFeatures: [
         `What your pattern predicts for your ${f}`,
