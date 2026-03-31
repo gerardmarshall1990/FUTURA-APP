@@ -24,16 +24,19 @@ const recognitionBlocks: Record<string, string[]> = {
     `You tend to think things through more deeply than most people, especially when the outcome matters.`,
     `You often sense the right direction early, but delay acting until your mind feels more settled.`,
     `There is a pattern of careful thinking in you, but hesitation sometimes stretches longer than it should.`,
+    `This is not the first time this pattern has slowed something down for you. You already know what it looks like — the sense that clarity is close, but the movement keeps waiting for a certainty that never quite arrives.`,
   ],
   open_then_recalibrates: [
     `You tend to give people the benefit of the doubt before fully protecting your own energy.`,
     `You often lead with openness, even when part of you already senses caution.`,
     `There is generosity in how you approach people, but experience has made you more selective over time.`,
+    `You have been through this sequence before — the openness that moves toward something before the discernment is fully in place, and the recalibration that follows. The pattern is familiar even when the situation is new.`,
   ],
   guarded_depth: [
     `You don't immediately reveal everything you feel, even when something matters a lot to you.`,
     `There is more emotional depth in you than most people ever see at first.`,
     `You tend to process things privately before allowing anyone else into what you're feeling.`,
+    `You have protected this depth before, in situations where sharing it earlier would have changed what became possible. The pattern is familiar — though what it costs is not always visible in the moment it is happening.`,
   ],
 }
 
@@ -104,19 +107,19 @@ const nearFutureBlocks: Record<FocusArea, string[]> = {
 
 const cutLinesByFocusAndState: Record<FocusArea, Record<CurrentState, string>> = {
   love: {
-    feeling_stuck:     `What has been keeping this relational pattern in place is not what it appears — and the thing that finally moves it is`,
-    turning_point:     `What this turning point in your love life is actually asking of you is different from what it looks like — and that difference is`,
-    okay_but_uncertain: `The shift building beneath the surface in your connections is already further along than it appears — and the part that matters most is`,
+    feeling_stuck:     `What has been keeping this relational pattern in place is not what it appears. Recognising it now — before this moment passes — is the difference between the pattern completing and the pattern repeating.`,
+    turning_point:     `What this turning point is actually asking of you is not what it looks like on the surface. Most people do not see the real ask until after the moment it was relevant.`,
+    okay_but_uncertain: `The relational shift already building is further along than it feels. What tips it into something you can actually work with is a specific move — one that has a window.`,
   },
   money: {
-    feeling_stuck:     `The financial opening already in motion will look different from what you expect when it arrives — whether you catch it comes down to`,
-    turning_point:     `What your decision pattern does at this exact financial juncture carries longer reach than usual — and the specific thing to watch for is`,
-    okay_but_uncertain: `The timing window in your financial pattern is narrower than it looks from here — and what determines whether it opens or closes for you is`,
+    feeling_stuck:     `The financial opening already in motion will look different from what you expect when it arrives. Missing it is not random — it follows a predictable pattern, and that pattern is yours.`,
+    turning_point:     `What your decision pattern does at this exact juncture carries longer reach than usual. The choices made here determine what options remain available afterward — not just now.`,
+    okay_but_uncertain: `The timing window in your financial pattern is narrower than it looks from where you are now. Once it closes, it resets — but not to the same position.`,
   },
   life_direction: {
-    feeling_stuck:     `The direction shift already building in your pattern is not the one you are expecting — and what it requires of you first is`,
-    turning_point:     `This is the part of this pattern most people do not see until after the window has already passed —`,
-    okay_but_uncertain: `What follows from this period changes how the next several months unfold — and the specific factor that tips it is`,
+    feeling_stuck:     `The direction shift already building is not the one you are expecting. What it requires of you first is the thing most people skip — and that skipping is precisely why the shift stalls.`,
+    turning_point:     `This is the part of this pattern most people only understand after the window has already closed.`,
+    okay_but_uncertain: `What follows from this period has a longer reach than the period itself. The specific factor that tips it either way is not obvious — but it is already in motion.`,
   },
 }
 
@@ -125,17 +128,17 @@ const cutLinesByFocusAndState: Record<FocusArea, Record<CurrentState, string>> =
 const lockedContinuationBlocks: Record<FocusArea, Record<string, string>> = {
   love: {
     mental_overprocessing: `The hesitation shaping your relational pattern is not about readiness — it appears just before emotional clarity would arrive, reliably, and reads like caution when it is closer to avoidance. In the next period, a situation will surface where your first instinct is accurate and your second-guessing is not. The tell is the speed of that first response, before the analysis begins. Your pattern delays most precisely at the point where things are about to resolve. The window here is roughly two to three weeks. The outcome depends less on circumstance than on whether you act before the hesitation becomes the decision itself.`,
-    open_then_recalibrates: `The relational shift approaching is a variation of a pattern you have navigated before — openness followed by recalibration, where the recalibration arrives just late enough to have already created a dynamic. The difference in this window is that discernment is available earlier than usual. Your pattern's strength is the initial openness; the cost is the recalibration timing. What is being asked of you in this period is to bring the recalibration instinct forward — not as protection, but as clarity before rather than after. That one adjustment, applied to a specific situation already forming, changes the outcome.`,
+    open_then_recalibrates: `The relational shift approaching follows a sequence you have been through before. This tends to happen when openness creates a dynamic before discernment has fully landed — you move toward someone or something, and the recalibration arrives just late enough to have already shaped the situation. In this window, that sequence is available to you earlier than usual. Discernment is possible before the dynamic sets. Your pattern predicts you will wait until after the openness to bring the clarity. The outcome changes when you bring them simultaneously — and the situation that requires this is already forming.`,
     guarded_depth: `The shift in your relational life will arrive quietly, through a specific moment of choice rather than a dramatic event. Your depth is real and it is an asset — but it has a consistent cost: the people worth reaching tend to need a signal first. What is building in this window is a situation where one specific act of expression, earlier than feels comfortable, determines what becomes available to you. Your pattern predicts you will wait for certainty before showing the depth. The shift happens when you act from the depth first. That moment is closer than it feels.`,
   },
   money: {
     mental_overprocessing: `The financial opening building in your pattern is being processed as a risk question when the actual variable is timing. The hesitation that has served as protection elsewhere is functioning as friction here — specifically at the point where a clear enough picture would normally produce action. In this window, the opportunity will arrive without feeling certain, which is consistent with your pattern. Waiting for certainty here has a cost that becomes visible in the three months following the decision point. Your pattern predicts you will either move earlier than feels comfortable and be correct, or move later than optimal and understand why afterward. The window for the first path is the next two to four weeks.`,
-    open_then_recalibrates: `The financial decision approaching rewards a version of your pattern you do not always trust — moving before the full picture is clear. Your instinct in this area tends to run ahead of your willingness to act on it. The recalibration instinct, which has protected you elsewhere, functions as delay in financial timing windows. What is building here is a situation where your first instinct about a resource, opportunity, or decision will be more accurate than the analysis that follows it. The timing is short. Acting from the first instinct rather than the recalibrated one is what determines the outcome in this specific window.`,
+    open_then_recalibrates: `The financial decision approaching rewards a version of your pattern you do not always trust. This tends to happen when instinct and analysis disagree: your first read on a resource, opportunity, or timing is more accurate than the second-guessing that follows. The recalibration instinct that has protected you in other areas functions as hesitation in financial windows. What is building here is a situation where the first instinct is pointing correctly and the analysis will override it if you let it. Acting before the recalibration takes over is the specific move this window requires. The timing is short — closer to days than weeks.`,
     guarded_depth: `The financial shift approaching will require you to be more visible than feels comfortable — not dramatically, but in one specific context. Your tendency to process privately before acting is a genuine strength, but this window has a dynamic where being seen taking a position is part of what creates the opening. What your pattern shows is a consistent sequence of waiting until internal clarity is complete before external action — and in financial timing windows, that sequence sometimes needs to reverse. The opening here does not require certainty. It requires a move before you feel fully ready. That moment is approaching in the next few weeks.`,
   },
   life_direction: {
     mental_overprocessing: `The direction shift already building in your pattern is not a dramatic event — it is a series of small recognitions you have been accumulating without yet acting on. The hesitation keeping the direction unclear is not about information; it is about the moment of commitment. Your pattern delays most precisely at the threshold between knowing and doing. In this window, the signals you have been processing are ready to be acted on — not all at once, but through one specific first step. That step does not require certainty. It requires choosing the direction before the picture is complete, which is consistently the moment your pattern identifies as the point where things shift.`,
-    open_then_recalibrates: `The path shift approaching is connected to who and what you continue to invest in moving forward. Your pattern of leading with openness and then recalibrating has shaped your direction more than any single decision has. In this window, the recalibration is not about correcting an error — it is about selecting more precisely. The people, projects, or directions your first instinct identified are worth a closer look. What is building in this period is a choice point about continued investment, and your pattern predicts you will recalibrate away from something your first instinct had right. The pattern to watch is whether that recalibration is clarity or hesitation.`,
+    open_then_recalibrates: `The path shift approaching is connected to a pattern of continued investment — in people, projects, or directions that felt right initially but have accumulated without reassessment. This tends to happen at a specific kind of crossroads: when the original openness that drove the investment is still present, but the direction it pointed to has quietly shifted. What is building in this period is a moment of clearer selection — not abandonment, but precision about what still deserves the investment. Your pattern predicts you will recalibrate away from something your first instinct had correctly identified. The thing to watch is whether what arrives as recalibration is genuine clarity or the familiar habit of second-guessing what was already right.`,
     guarded_depth: `The path correction ahead requires you to be more externally visible in one specific way — not broadly, not dramatically, but in one context where you have been processing the direction privately and waiting until it feels finished before sharing it. Your tendency to move through shifts internally before making them visible is a real strength, but this window has a dynamic where the direction itself becomes clearer through expression rather than through additional internal processing. What is building in the next period is a situation where sharing the direction, even partially, creates the external signal that accelerates the path. Your pattern predicts you will wait until it feels finished before saying anything. The shift happens when you say something before it feels finished.`,
   },
 }

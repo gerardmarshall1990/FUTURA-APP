@@ -101,7 +101,7 @@ export function buildPaywallCopy(source: PaywallSource, ctx: PaywallContext): Pa
     : ''
 
   const readingUrgency = hoursRemaining && hoursRemaining > 0
-    ? `${hoursRemaining}h before this reading is released — not held`
+    ? `Still held for you — personal readings are not stored indefinitely`
     : 'Generated specifically for you. Not a template.'
 
   // ── reading ─────────────────────────────────────────────────────────────────

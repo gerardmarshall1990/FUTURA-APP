@@ -269,7 +269,7 @@ export default function ReadingPage() {
             letterSpacing: '0.03em',
           }}>
             {hoursRemaining && hoursRemaining > 0
-              ? `Held for you · ${hoursRemaining} hours remaining · One-time from $4.99`
+              ? `Still held for you · One-time from $4.99`
               : 'One-time from $4.99 · No subscription required'}
           </p>
         </div>
