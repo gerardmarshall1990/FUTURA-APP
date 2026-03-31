@@ -22,6 +22,30 @@ const FOCUS_DEPTH_LABELS: Record<string, string> = {
   life_direction: 'the specific shift your pattern is moving toward',
 }
 
+// ─── Fallback teaser — shown when DB teaser is empty/null ─────────────────────
+// Covers: failed reading generation, null teaser_text, API error response
+
+function buildFallbackTeaser(name: string | null, focusArea: string | null): string[] {
+  const who = name ?? 'You'
+  const focusMap: Record<string, string> = {
+    love:
+      'The pattern in your connections is not random. It follows a sequence that your palm and your history make visible — and that sequence is about to complete a cycle.',
+    money:
+      'The timing window in your finances is more specific than you realise. Your palm shows a formation that appears in people approaching a financial shift — and your numbers align with it now.',
+    life_direction:
+      'The uncertainty you feel about direction is not a sign of being lost. It is a sign that something is completing. Your reading shows what is ending and what is beginning to take its place.',
+  }
+  const focusPara =
+    (focusArea && focusMap[focusArea]) ??
+    'The patterns in your palm and in your life reflect the same underlying sequence — and that sequence has a specific next step your reading makes visible.'
+
+  return [
+    `${who}, the lines in your palm are not vague. They are specific — and what they show about the next period of your life is not something most people ever discover.`,
+    focusPara,
+    'What follows this point in your reading is what you came here for.',
+  ]
+}
+
 // ─── Reading Paragraph ────────────────────────────────────────────────────────
 
 function ReadingParagraph({ text, index }: { text: string; index: number }) {
@@ -54,7 +78,6 @@ function CutZone({ cutLine, lockedPreview, focusArea }: {
 
   return (
     <div style={{ position: 'relative', marginTop: '0.75rem' }}>
-      {/* Context label above the blur */}
       <p style={{
         fontSize: '0.72rem',
         letterSpacing: '0.1em',
@@ -66,7 +89,6 @@ function CutZone({ cutLine, lockedPreview, focusArea }: {
         Your reading continues — {depthLabel}
       </p>
 
-      {/* Blurred cut line + locked preview */}
       <div style={{ position: 'relative' }}>
         <div style={{
           position: 'absolute', inset: 0, zIndex: 1,
@@ -104,16 +126,34 @@ export default function ReadingPage() {
     fetch(`/api/reading/latest?userId=${userId}`)
       .then(r => r.json())
       .then(data => {
-        setReading(data)
+        // Guard: only accept a valid reading object (not an error response)
+        if (data && typeof data.teaserText !== 'undefined') {
+          setReading(data)
+        } else {
+          // API returned an error or empty response — set partial object so
+          // we can still render the fallback teaser with any available fields
+          setReading({
+            id: '',
+            teaserText: '',
+            cutLine: '',
+            lockedText: null,
+            isUnlocked: false,
+            firstName: data?.firstName ?? null,
+            focusArea: data?.focusArea ?? null,
+            hoursRemaining: null,
+          })
+        }
         setLoading(false)
-        // Track reading viewed — updates last_active_at for lifecycle state
         fetch('/api/analytics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, eventName: 'teaser_viewed' }),
         }).catch(() => {})
       })
-      .catch(() => setLoading(false))
+      .catch(() => {
+        setReading(null)
+        setLoading(false)
+      })
   }, [userId, router])
 
   if (loading) {
@@ -124,12 +164,19 @@ export default function ReadingPage() {
     )
   }
 
-  const paragraphs = reading?.teaserText?.split('\n\n').filter(Boolean) ?? []
-  const name = reading?.firstName
+  const name = reading?.firstName ?? null
   const focusArea = reading?.focusArea ?? null
-  const hoursRemaining = reading?.hoursRemaining
+  const hoursRemaining = reading?.hoursRemaining ?? null
 
-  // Navigate to unlock with source context so paywall copy is relevant
+  // Use DB teaser paragraphs if present; fall back to generated teaser
+  const rawParagraphs = reading?.teaserText?.split('\n\n').filter(Boolean) ?? []
+  const paragraphs = rawParagraphs.length > 0
+    ? rawParagraphs
+    : buildFallbackTeaser(name, focusArea)
+
+  // Use DB cut line if present; fall back to a standard interruption signal
+  const cutLine = reading?.cutLine || 'This is where your reading deepens — and where most people realise something they had been avoiding.'
+
   function goToUnlock() {
     router.push('/unlock?source=reading')
   }
@@ -159,28 +206,26 @@ export default function ReadingPage() {
 
         <GoldDivider />
 
-        {/* Reading content */}
+        {/* Reading content — always renders (DB text or fallback) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {paragraphs.map((para, i) => (
             <ReadingParagraph key={i} text={para} index={i} />
           ))}
 
-          {/* Cut zone with context */}
-          {reading?.cutLine && (
-            <div className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
-              <CutZone
-                cutLine={reading.cutLine}
-                lockedPreview={reading.lockedText?.slice(0, 90) ?? ''}
-                focusArea={focusArea}
-              />
-            </div>
-          )}
+          {/* Cut zone with context — always shown */}
+          <div className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
+            <CutZone
+              cutLine={cutLine}
+              lockedPreview={reading?.lockedText?.slice(0, 90) ?? ''}
+              focusArea={focusArea}
+            />
+          </div>
         </div>
 
         <div style={{ height: '3rem' }} />
       </div>
 
-      {/* Sticky unlock CTA — visible on load */}
+      {/* Sticky unlock CTA */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         padding: '1rem 1.25rem 2rem',
@@ -193,7 +238,6 @@ export default function ReadingPage() {
             {name ? `Continue ${name}'s reading` : 'Continue my reading'}
           </PremiumButton>
 
-          {/* Urgency / trust line */}
           <p style={{
             textAlign: 'center', marginTop: '0.5rem',
             color: 'var(--text-muted)', fontSize: '0.7rem',
@@ -208,3 +252,4 @@ export default function ReadingPage() {
     </main>
   )
 }
+
