@@ -50,20 +50,21 @@ export async function POST(req: NextRequest) {
     try {
       features = await analyzePalm(publicUrl)
 
-      // Determine quality from line_clarity — accept-by-default
+      // Quality determined by line_clarity — bias toward accepting
       if (features.line_clarity === 'deep' || features.line_clarity === 'medium') {
         quality = 'good'
+        qualityFeedback = ''
       } else {
-        // faint or mixed — still usable, just warn
+        // faint or mixed — still fully usable for a reading
         quality = 'okay'
-        qualityFeedback = 'Lines are faint — try better lighting for the most accurate reading'
+        qualityFeedback = 'Your lines are subtle — your reading will still be deeply personal'
       }
     } catch (analysisErr) {
       console.error('[palm/analyze] vision error:', analysisErr)
-      // Do NOT return 422 — still return the uploaded image URL
-      // so the client can decide to retry or continue
-      quality = 'bad'
-      qualityFeedback = 'Could not read palm lines clearly — try more light or move closer'
+      // Model/service failure — not a reflection of image quality
+      // Always return okay so the user isn't blocked by a transient error
+      quality = 'okay'
+      qualityFeedback = 'We have your palm — your reading will be built from what you shared'
     }
 
     // ── 4. Store features + URL in user_profiles ───────────────────────────────

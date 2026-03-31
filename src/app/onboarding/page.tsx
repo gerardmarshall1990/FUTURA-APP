@@ -445,17 +445,17 @@ function palmDelay(ms: number) { return new Promise<void>(r => setTimeout(r, ms)
 const SIGNAL_COLOR: Record<CameraSignal, string> = {
   ready:  'rgba(201,169,110,0.55)',
   good:   '#3ecf8e',
-  warn:   '#f59e0b',
+  warn:   'rgba(201,169,110,0.55)',  // neutral gold — not alarming
   dark:   '#ef4444',
   bright: '#f59e0b',
 }
 
 const SIGNAL_TEXT: Record<CameraSignal, string> = {
-  ready:  'Place your palm inside the frame',
-  good:   'Tap to capture',
-  warn:   'Move closer · keep fingers visible',
-  dark:   'Need more light',
-  bright: 'Move away from bright light',
+  ready:  'Position your palm in the frame',
+  good:   'Ready — tap to scan',
+  warn:   'Place your palm in the frame',
+  dark:   'A little more light would help',
+  bright: 'Step away from direct light',
 }
 
 const PROCESSING_STEPS = ['Detecting palm', 'Checking clarity', 'Mapping lines']
@@ -539,10 +539,10 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
     r /= n; g /= n; b /= n
     const lum = 0.299 * r + 0.587 * g + 0.114 * b
 
-    if      (lum < 30)                                          setSignal('dark')
-    else if (lum > 230)                                         setSignal('bright')
-    else if (r > 100 && r > g * 1.07 && g > 60 && g > b * 0.88) setSignal('good')
-    else                                                        setSignal('warn')
+    // Only flag genuinely extreme conditions — everything in normal range is good
+    if      (lum < 30)  setSignal('dark')
+    else if (lum > 230) setSignal('bright')
+    else                setSignal('good')
   }
 
   async function capture() {
@@ -576,23 +576,33 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       const res  = await fetch('/api/palm/analyze', { method: 'POST', body: fd })
       const json = await res.json().catch(() => ({}))
 
-      // Hard failure — storage broken or network error
-      if (!res.ok && res.status !== 422 && res.status !== 200) {
-        setScanQuality('bad')
-        setFeedback(json.error ?? 'Upload failed — check your connection')
+      // Distinguish error types — never blame the user's palm for a service problem
+      if (res.status >= 500) {
+        // Infrastructure / network failure — not the user's fault
+        setScanQuality('okay')
+        setFeedback('Our system is taking a moment — you can continue or try again')
         setPhase('result')
         return
       }
 
-      const quality: ScanQuality = json.quality ?? (res.ok ? 'good' : 'bad')
+      if (res.status === 400) {
+        // Corrupted or non-image file — the only case we genuinely can't proceed
+        setScanQuality('bad')
+        setFeedback('That file doesn\'t look like a photo — try again')
+        setPhase('result')
+        return
+      }
+
+      const quality: ScanQuality = json.quality ?? 'good'
       if (json.publicUrl) setPalmImage(json.publicUrl, preview)
       setScanQuality(quality)
       setFeedback(json.feedback ?? '')
       setPhase('result')
       if (quality === 'good') { await palmDelay(800); onNext() }
     } catch {
-      setScanQuality('bad')
-      setFeedback('Check your connection and try again')
+      // Network error — service problem, not a palm quality problem
+      setScanQuality('okay')
+      setFeedback('Something interrupted the connection — you can continue or try again')
       setPhase('result')
     }
   }
@@ -655,7 +665,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       {cameraBlocked && (
         <div style={{ marginTop: '12px', background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px', padding: '10px 14px' }}>
           <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'rgba(245,158,11,0.85)', margin: 0, lineHeight: 1.5 }}>
-            Camera access denied. Use "Upload existing photo" or allow camera in your browser settings.
+            Camera isn't available — tap below to upload your palm photo instead.
           </p>
         </div>
       )}
