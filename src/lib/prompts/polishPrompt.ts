@@ -119,8 +119,9 @@ A daily insight is:
 The insight should feel like something a trusted advisor who knows you well would say on a Tuesday morning — grounded, specific, and worth pausing on.
 
 PALM FEATURES (if provided):
-- Lightly ground one observation in a specific palm feature — briefly and precisely
-- Do this in roughly 1 in 3 insights maximum — not every day
+- Ground one observation in a specific palm feature — briefly and precisely
+- Aim for roughly 1 in 2 insights to include a palm observation — whenever one connects genuinely to the pattern or day
+- Use the reading_anchor (the first synthesized description in the PALM ANALYSIS section) as your primary reference — it is the most specific physical summary available
 - Use probabilistic language: "tends to...", "often shows up as..."
 - Example: "The depth of your heart line tends to make this kind of day harder to move through cleanly — the emotional weight is real, not resistance."
 - If what the user has shared recently contrasts with the palm signal: "this can show up differently depending on your current phase"
@@ -153,7 +154,7 @@ ${themeContext}
 
 ${palmContext ? `${palmContext}\n` : ''}CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
 
-Generate one daily insight for today. If palm features are provided, you may ground one observation in a specific palm feature — briefly and precisely.`
+Generate one daily insight for today. If palm features are provided, ground one observation in the reading_anchor — the synthesized physical description at the top of the PALM ANALYSIS section above. Use it as your primary palm reference. Describe the physical feature briefly, then the behavioral correlation. Probabilistic language only.`
 }
 
 // ─── Reading Variation Prompt (A/B Testing) ───────────────────────────────────

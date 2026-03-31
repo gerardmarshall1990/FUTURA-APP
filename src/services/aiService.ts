@@ -151,7 +151,13 @@ export async function polishReading(
   name?: string | null,
   beliefSystem?: string | null,
   starSign?: string | null,
+  corePattern?: string | null,
+  emotionalPattern?: string | null,
 ): Promise<{ teaserText: string; cutLine: string; lockedText: string }> {
+  // Extract the reading_anchor from palm features — it is the primary synthesized
+  // physical description of this specific palm, used as the base for all palm references.
+  const readingAnchor = palmFeatures?.reading_anchor ?? undefined
+
   const polishInput: PolishPromptInput = {
     teaserRaw,
     cutLine,
@@ -162,13 +168,16 @@ export async function polishReading(
     beliefSystem: beliefSystem ?? undefined,
     starSign: starSign ?? undefined,
     palmContext: palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+    readingAnchor,
+    corePattern: corePattern ?? undefined,
+    emotionalPattern: emotionalPattern ?? undefined,
   }
 
   const qualitySignals: QualitySignals = {
     name:             name ?? null,
     starSign:         starSign ?? null,
-    corePattern:      null,       // not threaded through polish — identity summary carries it
-    emotionalPattern: null,
+    corePattern:      corePattern ?? null,
+    emotionalPattern: emotionalPattern ?? null,
     focusArea:        focusArea,
     palmFeatures:     palmFeatures ?? null,
   }
@@ -193,6 +202,7 @@ export async function polishReading(
         name ?? undefined,
         beliefSystem ?? undefined,
         starSign ?? undefined,
+        readingAnchor,
       ),
       'quality',
       400,
