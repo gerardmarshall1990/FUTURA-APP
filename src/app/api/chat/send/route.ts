@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
     const adminBypass  = isAdminUser(userId)
 
     if (!adminBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
-      return NextResponse.json({ paywallTriggered: true }, { status: 402 })
+      // Include message so the modal can reflect what was being explored
+      return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
     }
 
     // ── 2. Assemble full unified context ───────────────────────────────────────
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (!isUnlocked && user.remaining_chat_messages === 1) {
       const intent = await classifyMessageIntent(message, ctx.focusArea as never)
       if (intent === 'high_intent') {
-        return NextResponse.json({ paywallTriggered: true }, { status: 402 })
+        return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
       }
     }
 

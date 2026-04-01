@@ -31,6 +31,8 @@ import {
 import {
   buildAdvisorSystemPrompt,
   buildAdvisorOpeningMessage,
+  CHAT_OPENING_SYSTEM_PROMPT,
+  buildChatOpeningUserPrompt,
   INTENT_CLASSIFICATION_PROMPT,
   buildIntentClassificationPrompt,
 } from '@/lib/prompts/advisorPrompt'
@@ -373,6 +375,40 @@ export async function sendAdvisorMessage(
  */
 export function getAdvisorOpeningMessage(ctx: FullUserContext): string {
   return buildAdvisorOpeningMessage(ctx)
+}
+
+/**
+ * Generates an AI-powered chat opening when a reading is available.
+ * References the actual teaser text and reading_anchor so the first message
+ * feels like a continuation of what the user just read, not a reset.
+ *
+ * Falls back to the deterministic opener if AI call fails.
+ */
+export async function generateChatOpening(ctx: FullUserContext): Promise<string> {
+  if (!ctx.teaserText) return buildAdvisorOpeningMessage(ctx)
+
+  try {
+    const userPrompt = buildChatOpeningUserPrompt(
+      ctx.firstName,
+      ctx.teaserText,
+      ctx.palmFeatures?.reading_anchor ?? null,
+      ctx.corePattern,
+      ctx.focusArea,
+    )
+
+    const result = await complete(
+      CHAT_OPENING_SYSTEM_PROMPT,
+      userPrompt,
+      'fast',   // gpt-4o-mini — keeps latency low for opening message
+      120,
+      0.72,
+    )
+
+    const opener = result.trim()
+    return opener || buildAdvisorOpeningMessage(ctx)
+  } catch {
+    return buildAdvisorOpeningMessage(ctx)
+  }
 }
 
 // ─── Memory Services ──────────────────────────────────────────────────────────

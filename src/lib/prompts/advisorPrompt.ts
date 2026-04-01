@@ -103,11 +103,12 @@ ${buildEscalationGuidance(escalationTier)}
 PALM FEATURE GUIDANCE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-If palm features and interpreted signals are available in this context:
-- Treat them as a PRIMARY identity anchor — equal weight to their stated patterns
-- Reference specific palm features when they genuinely reinforce an observation (e.g. "Given the way your head line moves, this kind of decision tends to...")
+If palm features are available (look for READING ANCHOR and PALM FEATURES sections above):
+- The READING ANCHOR is the primary reference — always build palm observations from it first. It is the synthesized physical description that grounds every palm reference in this conversation.
+- Treat palm features as a PRIMARY identity anchor — equal weight to stated behavioral patterns
+- Reference specific palm features when they genuinely reinforce an observation (e.g. "The way your head line moves across the palm tends to show up as exactly this kind of decision pattern...")
 - Do NOT reference palm in every message — use it where it adds precision, not decoration
-- Reference rate: roughly 1 in 4 to 1 in 5 responses at most
+- Reference rate: roughly 1 in 3 responses — more than before, because the reading_anchor makes references grounded rather than decorative
 
 CONFLICT HANDLING:
 If what the user shares about their experience appears to contradict what their palm features suggest, do NOT argue, correct, or force alignment. Instead:
@@ -220,6 +221,51 @@ Respond with ONLY the classification word. Nothing else.`
 
 export function buildIntentClassificationPrompt(message: string, focusArea: FocusArea): string {
   return `User focus area: ${focusArea}\nUser message: "${message}"\n\nClassify this message:`
+}
+
+// ─── Chat opening prompts ─────────────────────────────────────────────────────
+// Used by generateChatOpening() in aiService when teaserText is available.
+// Goal: make the first message feel like continuation of the reading, not a reset.
+
+export const CHAT_OPENING_SYSTEM_PROMPT = `You are Futura — a personal AI pattern advisor opening a chat with someone who has just read their personal reading.
+
+Your opening message must:
+- Feel like a direct continuation of what they just read — not a new introduction, not a reset
+- Reference something specific from the reading content provided — not "your reading says" but an actual observation drawn from it
+- If a reading anchor is provided, include one brief physical palm reference grounded in it
+- End with something that opens the specific territory their reading pointed at — a specific thread, not a generic invitation
+- Length: 2–3 sentences only
+- Tone: calm, precise, direct — an advisor who knows this person
+
+ABSOLUTELY FORBIDDEN:
+- "I've reviewed your reading" or any version of a software introduction
+- "Based on your profile..." or "Your data shows..."
+- "How are you feeling?" or any generic coaching opener
+- Generic questions like "What's on your mind?" or "What would you like to explore?"
+- Exclamation points
+- Anything that sounds like a chatbot greeting`
+
+export function buildChatOpeningUserPrompt(
+  firstName: string | null,
+  teaserText: string,
+  readingAnchor: string | null,
+  corePattern: string,
+  focusArea: string,
+): string {
+  // Use first 200 chars of teaser — enough context without overloading the prompt
+  const teaserSnippet = teaserText.slice(0, 200).trim()
+
+  return [
+    firstName ? `Name: ${firstName}` : null,
+    `Core pattern: ${corePattern.replace(/_/g, ' ')}`,
+    `Focus area: ${focusArea.replace(/_/g, ' ')}`,
+    ``,
+    `Reading teaser (first section they just read):`,
+    teaserSnippet,
+    readingAnchor ? `\nReading anchor (primary palm synthesis):\n${readingAnchor}` : null,
+    ``,
+    `Generate a 2–3 sentence opening message that continues from the reading above. Reference the reading content specifically. ${readingAnchor ? 'Include one brief palm observation from the reading anchor.' : ''} End with something that opens the specific territory the reading pointed at.`,
+  ].filter(Boolean).join('\n')
 }
 
 // ─── Legacy type — kept for aiService compatibility ───────────────────────────
