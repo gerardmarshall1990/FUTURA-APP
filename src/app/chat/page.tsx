@@ -195,6 +195,13 @@ function ChatPageInner() {
     // Show typing indicator while fetching personalized opening message
     setSending(true)
 
+    // Track chat_started
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, eventName: 'chat_started' }),
+    }).catch(() => {})
+
     // Fetch personalized opening message and suggested prompts in parallel
     Promise.all([
       fetch(`/api/chat/opening?userId=${userId}`).then(r => r.json()),
@@ -236,6 +243,17 @@ function ChatPageInner() {
     setInput('')
     setSending(true)
 
+    // Track message_sent
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        eventName: 'message_sent',
+        properties: { focusArea: userFocusArea },
+      }),
+    }).catch(() => {})
+
     try {
       const res = await fetch('/api/chat/send', {
         method: 'POST',
@@ -246,12 +264,31 @@ function ChatPageInner() {
       if (res.status === 402) {
         const data = await res.json().catch(() => ({}))
         if (data.lastMessage) setPaywallLastMessage(data.lastMessage)
+        // Track paywall hit
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            eventName: 'paywall_triggered_chat',
+            properties: { source: 'chat', focusArea: userFocusArea },
+          }),
+        }).catch(() => {})
         setSending(false); setShowPaywall(true); return
       }
 
       const data = await res.json()
       if (data.paywallTriggered) {
         if (data.lastMessage) setPaywallLastMessage(data.lastMessage)
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            eventName: 'paywall_triggered_chat',
+            properties: { source: 'chat', focusArea: userFocusArea },
+          }),
+        }).catch(() => {})
         setSending(false); setShowPaywall(true); return
       }
 

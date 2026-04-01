@@ -511,6 +511,12 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       streamRef.current = stream
       setPhase('camera')
       timerRef.current = setInterval(analyzeFrame, 800)
+      // Track palm scan started
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, eventName: 'palm_scan_started' }),
+      }).catch(() => {})
     } catch {
       setCameraBlocked(true)
     }
@@ -598,6 +604,12 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       setScanQuality(quality)
       setFeedback(json.feedback ?? '')
       setPhase('result')
+      // Track palm scan completed (any quality that produced a result)
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, eventName: 'palm_scan_completed', properties: { quality } }),
+      }).catch(() => {})
       if (quality === 'good') { await palmDelay(800); onNext() }
     } catch {
       // Network error — service problem, not a palm quality problem
@@ -938,6 +950,18 @@ export default function OnboardingPage() {
   const { userId } = useSessionStore()
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
+
+  // Fire onboarding_started once on mount
+  useEffect(() => {
+    if (!userId) return
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, eventName: 'onboarding_started' }),
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   const totalSteps = 8 // 3 new + palm + 4 questions
 
@@ -978,6 +1002,17 @@ export default function OnboardingPage() {
         }),
       })
 
+      // Track onboarding_completed before kicking off reading generation
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          eventName: 'onboarding_completed',
+          properties: { focusArea: store.focusArea },
+        }),
+      }).catch(() => {})
+
       await fetch('/api/reading/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -987,6 +1022,7 @@ export default function OnboardingPage() {
       router.push('/generating')
     } catch {
       setSubmitting(false)
+      setSubmitError(true)
     }
   }
 
@@ -1012,6 +1048,24 @@ export default function OnboardingPage() {
       <div className="page-inner">
         <TopBar showBack onBack={handleBack} />
         <ProgressBar step={step + 1} total={totalSteps} />
+
+        {/* Generation error — only shown if reading/profile creation fails */}
+        {submitError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.75rem 1rem',
+            marginBottom: '0.75rem',
+          }}>
+            <p style={{
+              fontFamily: 'var(--font-body)', fontSize: '0.82rem',
+              color: 'rgba(239,68,68,0.85)', lineHeight: 1.5,
+            }}>
+              Something interrupted your reading. Tap Continue again to retry.
+            </p>
+          </div>
+        )}
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingBottom: '2rem' }}>
           {step === 0 && <NameScreen onNext={handleNext} />}

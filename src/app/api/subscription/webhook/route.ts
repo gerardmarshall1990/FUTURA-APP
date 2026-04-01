@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseStripeWebhook, applyWebhookResult } from '@/services/stripeService'
-import { trackEvent } from '@/services/analyticsService'
+import { trackEvent, trackEngagementEvent } from '@/services/analyticsService'
 
 export const runtime = 'nodejs'
 
@@ -29,10 +29,19 @@ export async function POST(req: NextRequest) {
   try {
     await applyWebhookResult(result)
 
-    trackEvent(result.userId, webhookTypeToAnalyticsEvent(result.type), {
+    const analyticsEventName = webhookTypeToAnalyticsEvent(result.type)
+    trackEvent(result.userId, analyticsEventName, {
       amount: result.amount,
       source: 'stripe',
     }).catch(err => console.error('[webhook analytics]', err))
+
+    // Write unlock_completed to engagement_events for funnel conversion queries
+    if (result.type === 'unlock' || result.type === 'subscription_started') {
+      trackEngagementEvent(result.userId, 'unlock_completed', {}, {
+        type: result.type,
+        amount: result.amount,
+      }).catch(() => {})
+    }
 
     console.log(`[webhook] ✓ ${result.type} for user ${result.userId}`)
     return NextResponse.json({ received: true })

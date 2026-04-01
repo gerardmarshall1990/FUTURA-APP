@@ -36,6 +36,13 @@ export default function HomePage() {
       return
     }
 
+    // Track app_opened on every home page visit
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, eventName: 'app_opened' }),
+    }).catch(() => {})
+
     async function loadDashboard() {
       try {
         const [insightRes, promptsRes, triggersRes] = await Promise.all([
@@ -59,6 +66,31 @@ export default function HomePage() {
 
   const displayName = name || 'Seeker'
   const greeting = getGreeting()
+
+  // Loading skeleton — prevents blank screen during dashboard fetch
+  if (loading) {
+    return (
+      <main className="page" style={{ paddingTop: '2rem', paddingBottom: '3rem', gap: 0 }}>
+        <div className="page-inner" style={{ gap: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <FuturaLogo size="sm" />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <div style={{ height: '0.75rem', width: '5rem', background: 'var(--bg-elevated)', borderRadius: 4 }} />
+            <div style={{ height: '1.8rem', width: '8rem', background: 'var(--bg-elevated)', borderRadius: 4 }} />
+          </div>
+          {[1, 2].map(i => (
+            <div key={i} style={{
+              height: '5rem', width: '100%',
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)', animation: 'blink 1.4s ease infinite',
+              animationDelay: `${i * 0.15}s`,
+            }} />
+          ))}
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="page" style={{ paddingTop: '2rem', paddingBottom: '3rem', gap: 0 }}>
@@ -100,7 +132,16 @@ export default function HomePage() {
 
         {/* Daily Insight Card — subscribers see full insight, non-subscribers see locked teaser */}
         {insight && isSubscribed ? (
-          <div className="animate-fade-up delay-200" style={{
+          <div
+            className="animate-fade-up delay-200"
+            onClick={() => {
+              fetch('/api/analytics/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, eventName: 'insight_viewed' }),
+              }).catch(() => {})
+            }}
+            style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-lg)',
@@ -208,6 +249,15 @@ export default function HomePage() {
               cursor: 'pointer',
             }}
             onClick={() => {
+              fetch('/api/analytics/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userId,
+                  eventName: 'trigger_clicked',
+                  properties: { trigger_type: trigger.trigger_type, source: 'home' },
+                }),
+              }).catch(() => {})
               if (trigger.trigger_type.startsWith('fomo')) router.push('/unlock?source=trigger')
               else router.push('/chat')
             }}

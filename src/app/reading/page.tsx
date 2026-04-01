@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
@@ -144,6 +144,8 @@ export default function ReadingPage() {
   const { userId } = useSessionStore()
   const [reading, setReading] = useState<Reading | null>(null)
   const [loading, setLoading] = useState(true)
+  const cutZoneRef = useRef<HTMLDivElement>(null)
+  const cutTrackedRef = useRef(false)
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
@@ -169,10 +171,15 @@ export default function ReadingPage() {
           })
         }
         setLoading(false)
+        // Track reading_viewed with focusArea context
         fetch('/api/analytics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, eventName: 'teaser_viewed' }),
+          body: JSON.stringify({
+            userId,
+            eventName: 'reading_viewed',
+            properties: { focusArea: data?.focusArea ?? null },
+          }),
         }).catch(() => {})
       })
       .catch(() => {
@@ -180,6 +187,31 @@ export default function ReadingPage() {
         setLoading(false)
       })
   }, [userId, router])
+
+  // Track cut_reached when the cut zone scrolls into view
+  useEffect(() => {
+    if (!cutZoneRef.current || cutTrackedRef.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !cutTrackedRef.current) {
+          cutTrackedRef.current = true
+          fetch('/api/analytics/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId,
+              eventName: 'cut_reached',
+              properties: { focusArea: reading?.focusArea ?? null },
+            }),
+          }).catch(() => {})
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.5 }
+    )
+    observer.observe(cutZoneRef.current)
+    return () => observer.disconnect()
+  }, [userId, reading, loading])
 
   if (loading) {
     return (
@@ -203,6 +235,16 @@ export default function ReadingPage() {
   const cutLine = reading?.cutLine || 'What follows from this is the part most people do not see until after the window has already passed —'
 
   function goToUnlock() {
+    // Track paywall_viewed with source before navigating
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        eventName: 'paywall_viewed',
+        properties: { source: 'reading', focusArea: focusArea },
+      }),
+    }).catch(() => {})
     router.push('/unlock?source=reading')
   }
 
@@ -237,8 +279,8 @@ export default function ReadingPage() {
             <ReadingParagraph key={i} text={para} index={i} />
           ))}
 
-          {/* Cut zone with context — always shown */}
-          <div className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
+          {/* Cut zone with context — always shown. ref used for cut_reached event. */}
+          <div ref={cutZoneRef} className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
             <CutZone
               cutLine={cutLine}
               lockedPreview={reading?.lockedText?.slice(0, 90) ?? ''}

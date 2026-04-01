@@ -20,19 +20,26 @@ export const EVENT_NAMES = {
   // Acquisition & onboarding
   APP_OPENED:              'app_opened',
   ONBOARDING_STARTED:      'onboarding_started',
+  ONBOARDING_COMPLETED:    'onboarding_completed',
+  ONBOARDING_ABANDONED:    'onboarding_abandoned',
+  PALM_SCAN_STARTED:       'palm_scan_started',
+  PALM_SCAN_COMPLETED:     'palm_scan_completed',
   PALM_UPLOADED:           'palm_uploaded',
   PALM_SKIPPED:            'palm_skipped',
   QUESTION_ANSWERED:       'question_answered',
-  ONBOARDING_COMPLETED:    'onboarding_completed',
-  ONBOARDING_ABANDONED:    'onboarding_abandoned',
 
   // Reading
   READING_GENERATED:       'reading_generated',
-  TEASER_VIEWED:           'teaser_viewed',
+  READING_VIEWED:          'reading_viewed',
+  CUT_REACHED:             'cut_reached',
+  TEASER_VIEWED:           'teaser_viewed',          // legacy alias — kept for continuity
   TEASER_SCROLLED:         'teaser_scrolled',
   FULL_READING_VIEWED:     'full_reading_viewed',
 
-  // Paywall & conversion
+  // Conversion
+  PAYWALL_VIEWED:          'paywall_viewed',
+  UNLOCK_CLICKED:          'unlock_clicked',
+  UNLOCK_COMPLETED:        'unlock_completed',
   UNLOCK_PAYWALL_VIEWED:   'unlock_paywall_viewed',
   UNLOCK_PURCHASED:        'unlock_purchased',
   SUBSCRIPTION_PAYWALL_VIEWED: 'subscription_paywall_viewed',
@@ -44,12 +51,16 @@ export const EVENT_NAMES = {
 
   // Chat
   CHAT_STARTED:            'chat_started',
-  CHAT_MESSAGE_SENT:       'chat_message_sent',
+  MESSAGE_SENT:            'message_sent',
+  PAYWALL_TRIGGERED_CHAT:  'paywall_triggered_chat',
+  CHAT_MESSAGE_SENT:       'chat_message_sent',      // legacy alias — kept for continuity
   CHAT_PAYWALL_HIT:        'chat_paywall_hit',
   UPGRADE_MODAL_SHOWN:     'upgrade_modal_shown',
   UPGRADE_MODAL_DISMISSED: 'upgrade_modal_dismissed',
 
-  // Engagement
+  // Retention
+  TRIGGER_CLICKED:         'trigger_clicked',
+  INSIGHT_VIEWED:          'insight_viewed',
   READING_SHARED:          'reading_shared',
   SESSION_RESUMED:         'session_resumed',
 } as const
@@ -57,6 +68,16 @@ export const EVENT_NAMES = {
 export type EventName = typeof EVENT_NAMES[keyof typeof EVENT_NAMES]
 
 // ─── Server-side event tracking ───────────────────────────────────────────────
+
+// ─── Funnel-queryable context fields ─────────────────────────────────────────
+// These fields are extracted from properties and stored as top-level columns
+// on engagement_events so SQL funnel queries can filter without JSON operators.
+
+export interface EngagementEventContext {
+  lifecycleState?: string | null
+  focusArea?:      string | null
+  source?:         string | null
+}
 
 /**
  * Track an event server-side (from route handlers).
@@ -77,6 +98,36 @@ export async function trackEvent(
   } catch (err) {
     // Never throw on analytics failure — log and move on
     console.error('[analytics] Failed to track event:', eventName, err)
+  }
+}
+
+/**
+ * Track a funnel event to engagement_events — the primary table for
+ * SQL funnel queries (onboarding→reading, reading→paywall, etc.)
+ *
+ * Schema: { user_id, event_type, metadata: { lifecycleState, focusArea, source, ...extra } }
+ * This is the Phase 8 analytics store. analytics_events remains a secondary log.
+ */
+export async function trackEngagementEvent(
+  userId: string | null,
+  eventType: string,
+  ctx?: EngagementEventContext,
+  extra?: Record<string, unknown>
+): Promise<void> {
+  try {
+    await getAdminClient().from('engagement_events').insert({
+      user_id:    userId,
+      event_type: eventType,
+      metadata:   {
+        lifecycle_state: ctx?.lifecycleState ?? null,
+        focus_area:      ctx?.focusArea      ?? null,
+        source:          ctx?.source         ?? null,
+        timestamp:       new Date().toISOString(),
+        ...extra,
+      },
+    })
+  } catch (err) {
+    console.error('[analytics] Failed to track engagement event:', eventType, err)
   }
 }
 

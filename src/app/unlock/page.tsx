@@ -101,12 +101,19 @@ function UnlockPageInner() {
           palmReadingAnchor: data.palmReadingAnchor  ?? null,
           exposureCount:     data.exposureCount      ?? 0,
         })
-        // Fire paywall_viewed AFTER reading the count so this visit
-        // increments the counter for the NEXT visit (not this one)
+        // Fire paywall_viewed with source so funnel queries can segment by entry point
         fetch('/api/analytics/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, eventName: 'paywall_viewed' }),
+          body: JSON.stringify({
+            userId,
+            eventName: 'paywall_viewed',
+            properties: {
+              source,
+              focusArea: data.focusArea ?? null,
+              exposure_count: data.exposureCount ?? 0,
+            },
+          }),
         }).catch(() => {})
       })
       .catch(() => {})
@@ -120,6 +127,22 @@ function UnlockPageInner() {
   async function handlePurchase() {
     if (!userId) return
     setLoading(true)
+
+    // Track unlock_clicked before redirecting to Stripe
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        eventName: 'unlock_clicked',
+        properties: {
+          type: selected,
+          source,
+          focusArea: ctx.focusArea ?? null,
+        },
+      }),
+    }).catch(() => {})
+
     try {
       const res = await fetch('/api/unlock', {
         method: 'POST',
