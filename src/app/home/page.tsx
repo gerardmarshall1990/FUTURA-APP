@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FuturaLogo, Orb, PremiumButton, GoldDivider } from '@/components/shared'
+import { FuturaLogo, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore, useOnboardingStore } from '@/store'
+import { track } from '@/lib/clientAnalytics'
 
 interface DailyInsight {
   insight_text: string
@@ -36,12 +37,7 @@ export default function HomePage() {
       return
     }
 
-    // Track app_opened on every home page visit
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, eventName: 'app_opened' }),
-    }).catch(() => {})
+    track(userId, 'app_opened')
 
     async function loadDashboard() {
       try {
@@ -134,13 +130,7 @@ export default function HomePage() {
         {insight && isSubscribed ? (
           <div
             className="animate-fade-up delay-200"
-            onClick={() => {
-              fetch('/api/analytics/track', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, eventName: 'insight_viewed' }),
-              }).catch(() => {})
-            }}
+            onClick={() => track(userId, 'insight_viewed')}
             style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
@@ -249,15 +239,7 @@ export default function HomePage() {
               cursor: 'pointer',
             }}
             onClick={() => {
-              fetch('/api/analytics/track', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  userId,
-                  eventName: 'trigger_clicked',
-                  properties: { trigger_type: trigger.trigger_type, source: 'home' },
-                }),
-              }).catch(() => {})
+              track(userId, 'trigger_clicked', { trigger_type: trigger.trigger_type, source: 'home' })
               if (trigger.trigger_type.startsWith('fomo')) router.push('/unlock?source=trigger')
               else router.push('/chat')
             }}

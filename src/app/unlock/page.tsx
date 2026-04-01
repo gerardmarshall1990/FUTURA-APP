@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
 import { buildPaywallCopy, type PaywallSource, type PaywallContext } from '@/lib/paywallCopy'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Withheld Preview Card ─────────────────────────────────────────────────────
 // Shows the blurred cut line — makes the withheld content tangible and specific.
@@ -102,19 +103,11 @@ function UnlockPageInner() {
           exposureCount:     data.exposureCount      ?? 0,
         })
         // Fire paywall_viewed with source so funnel queries can segment by entry point
-        fetch('/api/analytics/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            eventName: 'paywall_viewed',
-            properties: {
-              source,
-              focusArea: data.focusArea ?? null,
-              exposure_count: data.exposureCount ?? 0,
-            },
-          }),
-        }).catch(() => {})
+        track(userId, 'paywall_viewed', {
+          source,
+          focusArea: data.focusArea ?? null,
+          exposure_count: data.exposureCount ?? 0,
+        })
       })
       .catch(() => {})
       .finally(() => setCtxLoaded(true))
@@ -128,20 +121,7 @@ function UnlockPageInner() {
     if (!userId) return
     setLoading(true)
 
-    // Track unlock_clicked before redirecting to Stripe
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        eventName: 'unlock_clicked',
-        properties: {
-          type: selected,
-          source,
-          focusArea: ctx.focusArea ?? null,
-        },
-      }),
-    }).catch(() => {})
+    track(userId, 'unlock_clicked', { type: selected, source, focusArea: ctx.focusArea ?? null })
 
     try {
       const res = await fetch('/api/unlock', {

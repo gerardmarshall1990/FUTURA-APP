@@ -8,6 +8,7 @@ import { assembleUserContext } from '@/services/profileOrchestrator'
 import { writeMemory } from '@/services/memoryService'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { isAdminUser } from '@/lib/adminBypass'
+import { trackEngagementEvent } from '@/services/analyticsService'
 
 export async function POST(req: NextRequest) {
   try {
@@ -106,6 +107,10 @@ export async function POST(req: NextRequest) {
         event_name: 'chat_message_sent',
         properties: { session_id: activeSessionId, remaining: newCount, lifecycle: ctx.lifecycleState },
       }),
+      trackEngagementEvent(userId, 'message_sent', {
+        lifecycleState: ctx.lifecycleState,
+        focusArea:      ctx.focusArea,
+      }, { session_id: activeSessionId, remaining: newCount }),
     ])
 
     // ── 7. Memory extraction — every 6 user messages (non-blocking) ────────────

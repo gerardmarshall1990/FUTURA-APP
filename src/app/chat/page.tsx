@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { FuturaLogo, PremiumButton } from '@/components/shared'
 import { useSessionStore } from '@/store'
 import { Suspense } from 'react'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -195,12 +196,7 @@ function ChatPageInner() {
     // Show typing indicator while fetching personalized opening message
     setSending(true)
 
-    // Track chat_started
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, eventName: 'chat_started' }),
-    }).catch(() => {})
+    track(userId, 'chat_started')
 
     // Fetch personalized opening message and suggested prompts in parallel
     Promise.all([
@@ -243,16 +239,7 @@ function ChatPageInner() {
     setInput('')
     setSending(true)
 
-    // Track message_sent
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        eventName: 'message_sent',
-        properties: { focusArea: userFocusArea },
-      }),
-    }).catch(() => {})
+    track(userId, 'message_sent', { focusArea: userFocusArea })
 
     try {
       const res = await fetch('/api/chat/send', {
@@ -264,16 +251,7 @@ function ChatPageInner() {
       if (res.status === 402) {
         const data = await res.json().catch(() => ({}))
         if (data.lastMessage) setPaywallLastMessage(data.lastMessage)
-        // Track paywall hit
-        fetch('/api/analytics/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            eventName: 'paywall_triggered_chat',
-            properties: { source: 'chat', focusArea: userFocusArea },
-          }),
-        }).catch(() => {})
+        track(userId, 'paywall_triggered_chat', { source: 'chat', focusArea: userFocusArea })
         setSending(false); setShowPaywall(true); return
       }
 

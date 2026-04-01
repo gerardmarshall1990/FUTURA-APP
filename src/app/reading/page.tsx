@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import { track } from '@/lib/clientAnalytics'
 
 interface Reading {
   id: string
@@ -171,16 +172,7 @@ export default function ReadingPage() {
           })
         }
         setLoading(false)
-        // Track reading_viewed with focusArea context
-        fetch('/api/analytics/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            eventName: 'reading_viewed',
-            properties: { focusArea: data?.focusArea ?? null },
-          }),
-        }).catch(() => {})
+        track(userId, 'reading_viewed', { focusArea: data?.focusArea ?? null })
       })
       .catch(() => {
         setReading(null)
@@ -195,15 +187,7 @@ export default function ReadingPage() {
       ([entry]) => {
         if (entry.isIntersecting && !cutTrackedRef.current) {
           cutTrackedRef.current = true
-          fetch('/api/analytics/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId,
-              eventName: 'cut_reached',
-              properties: { focusArea: reading?.focusArea ?? null },
-            }),
-          }).catch(() => {})
+          track(userId, 'cut_reached', { focusArea: reading?.focusArea ?? null })
           observer.disconnect()
         }
       },
@@ -235,16 +219,7 @@ export default function ReadingPage() {
   const cutLine = reading?.cutLine || 'What follows from this is the part most people do not see until after the window has already passed —'
 
   function goToUnlock() {
-    // Track paywall_viewed with source before navigating
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        eventName: 'paywall_viewed',
-        properties: { source: 'reading', focusArea: focusArea },
-      }),
-    }).catch(() => {})
+    track(userId, 'paywall_viewed', { source: 'reading', focusArea })
     router.push('/unlock?source=reading')
   }
 

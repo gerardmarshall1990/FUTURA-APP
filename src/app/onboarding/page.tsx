@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, ProgressBar, PremiumButton, Orb } from '@/components/shared'
 import { useOnboardingStore, useSessionStore } from '@/store'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Life Path Number ─────────────────────────────────────────────────────────
 
@@ -512,11 +513,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       setPhase('camera')
       timerRef.current = setInterval(analyzeFrame, 800)
       // Track palm scan started
-      fetch('/api/analytics/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, eventName: 'palm_scan_started' }),
-      }).catch(() => {})
+      track(userId, 'palm_scan_started')
     } catch {
       setCameraBlocked(true)
     }
@@ -605,11 +602,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       setFeedback(json.feedback ?? '')
       setPhase('result')
       // Track palm scan completed (any quality that produced a result)
-      fetch('/api/analytics/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, eventName: 'palm_scan_completed', properties: { quality } }),
-      }).catch(() => {})
+      track(userId, 'palm_scan_completed', { quality })
       if (quality === 'good') { await palmDelay(800); onNext() }
     } catch {
       // Network error — service problem, not a palm quality problem
@@ -921,9 +914,10 @@ function OptionCard({ label, selected, onSelect }: { label: string; selected: bo
 
 // ─── Question Screen ──────────────────────────────────────────────────────────
 
-function QuestionScreen({ question, options, selected, onSelect, onNext, stepNumber }: {
+function QuestionScreen({ question, options, selected, onSelect, onNext, stepNumber, loading }: {
   question: string; options: { value: string; label: string }[]
   selected: string | null; onSelect: (v: string) => void; onNext: () => void; stepNumber: number
+  loading?: boolean
 }) {
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
@@ -936,7 +930,9 @@ function QuestionScreen({ question, options, selected, onSelect, onNext, stepNum
           <OptionCard key={opt.value} label={opt.label} selected={selected === opt.value} onSelect={() => onSelect(opt.value)} />
         ))}
       </div>
-      <PremiumButton onClick={onNext} disabled={!selected} size="lg">Continue</PremiumButton>
+      <PremiumButton onClick={onNext} disabled={!selected} loading={loading} size="lg">
+        {loading ? 'Building your reading...' : 'Continue'}
+      </PremiumButton>
     </div>
   )
 }
@@ -955,11 +951,7 @@ export default function OnboardingPage() {
   // Fire onboarding_started once on mount
   useEffect(() => {
     if (!userId) return
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, eventName: 'onboarding_started' }),
-    }).catch(() => {})
+    track(userId, 'onboarding_started')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
@@ -1003,15 +995,7 @@ export default function OnboardingPage() {
       })
 
       // Track onboarding_completed before kicking off reading generation
-      fetch('/api/analytics/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          eventName: 'onboarding_completed',
-          properties: { focusArea: store.focusArea },
-        }),
-      }).catch(() => {})
+      track(userId, 'onboarding_completed', { focusArea: store.focusArea })
 
       await fetch('/api/reading/generate', {
         method: 'POST',
@@ -1081,6 +1065,7 @@ export default function OnboardingPage() {
               onSelect={setters[currentQuestion.id]}
               onNext={step === totalSteps - 1 ? () => { if (!submitting) handleFinalNext() } : handleNext}
               stepNumber={step + 1}
+              loading={step === totalSteps - 1 ? submitting : false}
             />
           )}
         </div>

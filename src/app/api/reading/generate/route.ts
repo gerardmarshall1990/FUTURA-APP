@@ -5,6 +5,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 import { selectReadingBlocks } from '@/services/readingBlockService'
 import { composeReading } from '@/services/readingCompositionService'
 import { polishReading } from '@/services/aiService'
+import { trackEngagementEvent } from '@/services/analyticsService'
 
 export async function POST(req: NextRequest) {
   try {
@@ -75,16 +76,26 @@ export async function POST(req: NextRequest) {
 
     if (readingError) throw readingError
 
-    await supabase.from('analytics_events').insert({
-      user_id:    userId,
-      event_name: 'reading_generated',
-      properties: {
-        focus_area:        profile.focus_area,
+    // Write to analytics_events (PostHog log) and engagement_events (funnel queries) in parallel
+    await Promise.all([
+      supabase.from('analytics_events').insert({
+        user_id:    userId,
+        event_name: 'reading_generated',
+        properties: {
+          focus_area:        profile.focus_area,
+          current_state:     profile.current_state,
+          personality_trait: profile.personality_trait,
+          core_pattern:      profile.core_pattern,
+          reading_id:        reading.id,
+        },
+      }),
+      trackEngagementEvent(userId, 'reading_generated', { focusArea: profile.focus_area }, {
         current_state:     profile.current_state,
         personality_trait: profile.personality_trait,
         core_pattern:      profile.core_pattern,
-      },
-    })
+        reading_id:        reading.id,
+      }),
+    ])
 
     return NextResponse.json({ reading })
   } catch (err) {

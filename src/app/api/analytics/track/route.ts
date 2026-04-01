@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
           focusArea:      properties?.focusArea      as string ?? null,
           source:         properties?.source         as string ?? null,
         },
-        // strip the three known context fields; pass everything else as extra
+        // session_id + everything else that isn't a top-level context field
         Object.fromEntries(
           Object.entries(properties ?? {}).filter(([k]) => !['lifecycleState','focusArea','source'].includes(k))
         ),
