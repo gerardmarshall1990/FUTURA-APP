@@ -507,6 +507,7 @@ export async function generateDailyInsight(
   memoryThemes: MemoryTheme[],
   daysSinceReading: number,
   palmFeatures?: PalmFeatures | null,
+  readingAnchor?: string | null,
 ): Promise<string> {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const dayOfWeek = days[new Date().getDay()]
@@ -526,6 +527,7 @@ export async function generateDailyInsight(
       dayOfWeek,
       daysSinceReading,
       palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+      readingAnchor ?? undefined,
     ),
     'fast',
     200,
@@ -607,6 +609,21 @@ export interface TriggerCopy {
   subtext: string
 }
 
+// Per-trigger framing map — tells the AI what angle this specific trigger type should take.
+// Keeps the system prompt generic; framing is injected per-call so each type has distinct copy logic.
+const TRIGGER_TYPE_GUIDANCE: Record<string, string> = {
+  fomo_reading_preview:       'Frame: There is a reading waiting. The user has not seen what it says about them. Copy should feel like something specific is being withheld — not vague.',
+  fomo_insight_tease:         'Frame: Daily insights are generating and the user is missing them. Reference the pattern dimension they care about most.',
+  fomo_chat_limit:            'Frame: They hit a limit mid-conversation. The thread was going somewhere. Name what was being explored.',
+  continuation_unresolved:    'Frame: Something they brought to the advisor remains unresolved — it has not moved since they last engaged. Reference the actual memory theme, not the concept of a theme.',
+  escalation_pattern_shift:   'Frame: Their pattern has developed — the reading is no longer a static snapshot. Something has become clearer since they were last active. Name the specific shift.',
+  reactivation_insight:       'Frame: Time has passed. The situation they were navigating has likely shifted. A fresh observation is waiting.',
+  reactivation_pattern_update:'Frame: They had specific threads with the advisor. Those threads did not resolve themselves while they were away. Reference the memory themes directly.',
+  churn_prevention_value:     'Frame: Long absence. Do not be desperate. Be direct — their pattern has been developing without them watching it. Name what they would have seen.',
+  retention_daily_insight:    'Frame: Today is specific. Ground the copy in what today tends to ask of someone with this emotional pattern.',
+  retention_suggested_prompt: 'Frame: Offer a specific angle they have not yet explored with the advisor. Make it feel like a natural next step.',
+}
+
 const TRIGGER_COPY_SYSTEM_PROMPT = `You are writing personalized re-engagement copy for a palmistry and pattern advisor app called Futura.
 
 You will receive a user's profile and a trigger type. Write ONE headline and ONE subtext line.
@@ -627,6 +644,7 @@ export async function generateTriggerCopy(
   memoryKeys: string[],
   starSign: string | null,
   palmFeatures?: PalmFeatures | null,
+  memoryDescriptions?: string[],
 ): Promise<TriggerCopy> {
   const name = firstName ?? 'You'
   const focus = focusArea.replace(/_/g, ' ')
@@ -638,12 +656,23 @@ export async function generateTriggerCopy(
     ? `Palm reading anchor: ${palmFeatures.reading_anchor}`
     : ''
 
+  // Memory descriptions: actual values from emotional/behavioral memory,
+  // not just the keys. Used for continuation/reactivation triggers where
+  // copy needs to reference what the user was actually dealing with.
+  const memoryDescLine = memoryDescriptions && memoryDescriptions.length > 0
+    ? `Recent memory context:\n${memoryDescriptions.slice(0, 3).map(d => `- ${d}`).join('\n')}`
+    : ''
+
+  // Per-type framing guidance — injected into prompt to shape the copy angle
+  const framing = TRIGGER_TYPE_GUIDANCE[triggerType] ?? ''
+
   const userPrompt = `Trigger type: ${triggerType}
-Name: ${name}
+${framing ? `${framing}\n` : ''}Name: ${name}
 Focus area: ${focus}
 Emotional pattern: ${emotionalPattern}
 ${starSign ? `Star sign: ${starSign}` : ''}
 ${recentMemory ? `Recent behavioral themes: ${recentMemory}` : ''}
+${memoryDescLine}
 ${palmLine}
 
 Write the headline and subtext JSON for this trigger.`

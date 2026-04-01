@@ -136,10 +136,23 @@ export function buildDailyInsightPrompt(
   dayOfWeek: string,
   daysSinceReading: number,
   palmContext?: string,
+  readingAnchor?: string,
 ): string {
   const themeContext = memoryThemes.length > 0
     ? memoryThemes.map(t => `- ${t.key_theme}: ${t.description}`).join('\n')
     : 'No additional themes recorded yet.'
+
+  const readingAnchorSection = readingAnchor
+    ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+READING ANCHOR — Primary Palm Synthesis
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${readingAnchor}
+
+Ground palm observations in this anchor first. This is the most specific physical summary available for this person.
+
+`
+    : ''
 
   return `Generate a daily insight for this user.
 
@@ -152,9 +165,9 @@ FOCUS AREA: ${focusArea.replace('_', ' ')}
 BEHAVIORAL THEMES FROM THEIR HISTORY:
 ${themeContext}
 
-${palmContext ? `${palmContext}\n` : ''}CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
+${readingAnchorSection}${palmContext ? `${palmContext}\n` : ''}CONTEXT: It is ${dayOfWeek}. It has been ${daysSinceReading} day(s) since their reading.
 
-Generate one daily insight for today. If palm features are provided, ground one observation in the reading_anchor — the synthesized physical description at the top of the PALM ANALYSIS section above. Use it as your primary palm reference. Describe the physical feature briefly, then the behavioral correlation. Probabilistic language only.`
+Generate one daily insight for today. If palm features are provided, ground one observation in the READING ANCHOR above — that is the primary synthesized physical description of this person's palm. Use it as your primary palm reference. Describe the physical feature briefly, then the behavioral correlation. Probabilistic language only.`
 }
 
 // ─── Reading Variation Prompt (A/B Testing) ───────────────────────────────────
