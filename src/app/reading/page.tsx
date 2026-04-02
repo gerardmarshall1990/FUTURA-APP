@@ -223,6 +223,10 @@ export default function ReadingPage() {
     router.push('/unlock?source=reading')
   }
 
+  function goToFullReading() {
+    router.push('/full-reading')
+  }
+
   return (
     <main className="page" style={{ paddingBottom: '8rem' }}>
       <div className="page-inner">
@@ -267,7 +271,7 @@ export default function ReadingPage() {
         <div style={{ height: '3rem' }} />
       </div>
 
-      {/* Sticky unlock CTA */}
+      {/* Sticky CTA — unlocked users go to full reading; locked users go to paywall */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         padding: '1rem 1.25rem 2rem',
@@ -276,19 +280,35 @@ export default function ReadingPage() {
         gap: '0.4rem', zIndex: 10,
       }}>
         <div style={{ width: '100%', maxWidth: 420 }}>
-          <PremiumButton onClick={goToUnlock} size="lg">
-            {name ? `Continue ${name}'s reading` : 'Continue my reading'}
-          </PremiumButton>
-
-          <p style={{
-            textAlign: 'center', marginTop: '0.5rem',
-            color: 'var(--text-muted)', fontSize: '0.7rem',
-            letterSpacing: '0.03em',
-          }}>
-            {hoursRemaining && hoursRemaining > 0
-              ? `Still held for you · One-time from $4.99`
-              : 'One-time from $4.99 · No subscription required'}
-          </p>
+          {reading?.isUnlocked ? (
+            <>
+              <PremiumButton onClick={goToFullReading} size="lg">
+                {name ? `Read ${name}'s full reading` : 'Read full reading'}
+              </PremiumButton>
+              <p style={{
+                textAlign: 'center', marginTop: '0.5rem',
+                color: 'var(--text-muted)', fontSize: '0.7rem',
+                letterSpacing: '0.03em',
+              }}>
+                Full reading unlocked
+              </p>
+            </>
+          ) : (
+            <>
+              <PremiumButton onClick={goToUnlock} size="lg">
+                {name ? `Continue ${name}'s reading` : 'Continue my reading'}
+              </PremiumButton>
+              <p style={{
+                textAlign: 'center', marginTop: '0.5rem',
+                color: 'var(--text-muted)', fontSize: '0.7rem',
+                letterSpacing: '0.03em',
+              }}>
+                {hoursRemaining && hoursRemaining > 0
+                  ? `Still held for you · One-time from $4.99`
+                  : 'One-time from $4.99 · No subscription required'}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </main>

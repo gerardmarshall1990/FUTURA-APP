@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import type { PaywallStatus } from '@/services/stripeService'
 import { buildPaywallCopy, type PaywallSource, type PaywallContext } from '@/lib/paywallCopy'
 import { track } from '@/lib/clientAnalytics'
 
@@ -78,7 +79,7 @@ function FeatureRow({ text }: { text: string }) {
 function UnlockPageInner() {
   const router = useRouter()
   const params = useSearchParams()
-  const { userId } = useSessionStore()
+  const { userId, setUnlocked, setSubscribed, setRemainingMessages } = useSessionStore()
 
   const source      = (params.get('source') ?? 'default') as PaywallSource
   const showBeta    = params.get('beta') === 'true'   // visible only with ?beta=true
@@ -102,9 +103,21 @@ function UnlockPageInner() {
         body: JSON.stringify({ userId, code: betaCode.trim() }),
       })
       if (res.ok) {
+        // Refresh paywall status so the store reflects beta access immediately
+        try {
+          const statusRes = await fetch(`/api/paywall/status?userId=${userId}`)
+          const status: PaywallStatus = await statusRes.json()
+          if (status.isSubscribed) {
+            setSubscribed()
+          } else if (status.isUnlocked) {
+            setUnlocked()
+          }
+          setRemainingMessages(status.remainingMessages ?? 999)
+        } catch { /* store will be refreshed on next page load */ }
+
         setBetaStatus('success')
-        // Give user a moment to read the success message then redirect home
-        setTimeout(() => router.replace('/home'), 1800)
+        // Redirect directly into the unlocked reading experience
+        setTimeout(() => router.replace('/full-reading'), 1800)
       } else {
         setBetaStatus('invalid')
       }
