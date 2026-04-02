@@ -7,7 +7,7 @@ import { shouldTriggerPaywall } from '@/services/stripeService'
 import { assembleUserContext } from '@/services/profileOrchestrator'
 import { writeMemory } from '@/services/memoryService'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { isAdminUser } from '@/lib/adminBypass'
+import { isBetaUser } from '@/lib/betaAccess'
 import { trackEngagementEvent } from '@/services/analyticsService'
 
 export async function POST(req: NextRequest) {
@@ -32,9 +32,10 @@ export async function POST(req: NextRequest) {
 
     const isSubscribed = user.subscription_status === 'active'
     const isUnlocked   = user.unlock_status || isSubscribed
-    const adminBypass  = isAdminUser(userId)
+    // Admin and beta users skip all paywall checks
+    const fullBypass   = await isBetaUser(userId)   // includes admin bypass
 
-    if (!adminBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
+    if (!fullBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
       // Include message so the modal can reflect what was being explored
       return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
     }
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     ])
 
     // ── 4. High-intent paywall check (AI — only on last free message) ──────────
-    if (!isUnlocked && user.remaining_chat_messages === 1) {
+    if (!fullBypass && !isUnlocked && user.remaining_chat_messages === 1) {
       const intent = await classifyMessageIntent(message, ctx.focusArea as never)
       if (intent === 'high_intent') {
         return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })

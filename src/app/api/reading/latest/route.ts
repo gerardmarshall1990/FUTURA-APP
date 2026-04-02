@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { isAdminUser } from '@/lib/adminBypass'
+import { isBetaUser } from '@/lib/betaAccess'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     if (!reading) return NextResponse.json({ error: 'No reading found' }, { status: 404 })
 
-    const isUnlocked = isAdminUser(userId) || user?.unlock_status || user?.subscription_status === 'active'
+    const isUnlocked = (await isBetaUser(userId)) || user?.unlock_status || user?.subscription_status === 'active'
 
     // 72-hour expiry window from reading creation
     const expiresAt = reading.created_at
