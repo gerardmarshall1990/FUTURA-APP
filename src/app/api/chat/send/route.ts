@@ -44,7 +44,11 @@ export async function POST(req: NextRequest) {
     // Single call — identity + memory + palm + lifecycle state all included
     const ctx = await assembleUserContext(userId)
     if (!ctx) {
-      return NextResponse.json({ error: 'Context not found — complete onboarding first' }, { status: 404 })
+      return NextResponse.json({
+        response: 'Your advisor needs your reading profile to respond. Go back to the home screen and complete the setup.',
+        sessionId: null,
+        remainingMessages: user.remaining_chat_messages,
+      })
     }
 
     // ── 3. Fetch reading IDs + chat history in parallel ────────────────────────

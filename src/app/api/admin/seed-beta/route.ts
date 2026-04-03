@@ -2,18 +2,15 @@
  * GET /api/admin/seed-beta
  * GET /api/admin/seed-beta?userId=<uuid>
  *
- * Grants full access for testing by directly updating the users table.
- * Does NOT depend on the beta_access table existing.
- *
- * Sets on the user row:
- *   remaining_chat_messages = 999
- *   unlock_status = true
- *
- * Also attempts beta_access upsert if that table exists (best-effort).
+ * Full test-access grant. Does all of the following:
+ *  1. Sets remaining_chat_messages=999 + unlock_status=true on users table
+ *  2. Creates a stub user_profiles row if one doesn't exist (required for chat)
+ *  3. Best-effort: inserts into beta_access if the table exists
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
+import { normalizeProfile } from '@/services/profileNormalizationService'
 
 export async function GET(req: NextRequest) {
   const sb = getAdminClient()
@@ -37,13 +34,10 @@ export async function GET(req: NextRequest) {
     ? (users.find(u => u.id === requestedId) ?? users[0])
     : users[0]
 
-  // 2. Update users table — this is the critical step, works without any migration
+  // 2. Update users table — unlock + max messages
   const { error: userUpdateErr } = await sb
     .from('users')
-    .update({
-      remaining_chat_messages: 999,
-      unlock_status: true,
-    })
+    .update({ remaining_chat_messages: 999, unlock_status: true })
     .eq('id', target.id)
 
   if (userUpdateErr) {
@@ -53,8 +47,48 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // 3. Best-effort: upsert into beta_access if the table exists
-  let betaNote = 'skipped (table may not exist yet)'
+  // 3. Create stub user_profiles if missing — required for assembleUserContext()
+  //    Without this, chat/send returns 404 and chat shows empty bubbles.
+  const { data: existingProfile } = await sb
+    .from('user_profiles')
+    .select('user_id')
+    .eq('user_id', target.id)
+    .maybeSingle()
+
+  let profileNote = 'already exists'
+  if (!existingProfile) {
+    const defaults = {
+      focusArea: 'life_direction' as const,
+      currentState: 'turning_point' as const,
+      personalityTrait: 'overthink_decisions' as const,
+      ageBand: '25-34' as const,
+    }
+    const norm = normalizeProfile(defaults)
+
+    const { error: profileErr } = await sb.from('user_profiles').insert({
+      user_id: target.id,
+      focus_area: defaults.focusArea,
+      current_state: defaults.currentState,
+      personality_trait: defaults.personalityTrait,
+      age_band: defaults.ageBand,
+      core_pattern: norm.corePattern,
+      emotional_pattern: norm.emotionalPattern,
+      decision_pattern: norm.decisionPattern,
+      future_theme: norm.futureTheme,
+      identity_summary: norm.identitySummary,
+      first_name: null,
+      star_sign: null,
+      life_path_number: null,
+      belief_system: null,
+    })
+
+    profileNote = profileErr
+      ? `failed to create: ${profileErr.message}`
+      : 'stub created (focus=life_direction, state=turning_point)'
+  }
+
+  // 4. Best-effort: beta_access upsert
+  let betaNote = 'skipped'
   try {
     const { error: betaErr } = await sb
       .from('beta_access')
@@ -64,10 +98,10 @@ export async function GET(req: NextRequest) {
       )
     betaNote = betaErr ? `failed: ${betaErr.message}` : 'inserted'
   } catch {
-    betaNote = 'table does not exist — not needed, users table update is sufficient'
+    betaNote = 'table does not exist — not needed'
   }
 
-  // 4. Confirm what was written
+  // 5. Confirm
   const { data: userRow } = await sb
     .from('users')
     .select('id, remaining_chat_messages, unlock_status')
@@ -76,13 +110,11 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    grantedTo: {
-      userId: target.id,
-      email: target.email,
-    },
+    grantedTo: { userId: target.id, email: target.email },
     userRow,
+    profileNote,
     betaAccess: betaNote,
     recentUsers: users.map(u => ({ id: u.id, email: u.email, createdAt: u.created_at })),
-    message: `Access granted to ${target.email ?? target.id}. remaining_chat_messages=999, unlock_status=true.`,
+    message: `Done. remaining_chat_messages=999, unlock_status=true, profile: ${profileNote}`,
   })
 }

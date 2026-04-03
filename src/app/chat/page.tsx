@@ -284,7 +284,12 @@ function ChatPageInner() {
         setSending(false); setShowPaywall(true); return
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
+      // Surface any server error as a visible message — never render an empty bubble
+      const responseText = data.response
+        || (data.error ? `Something went wrong: ${data.error}` : null)
+        || 'Something went wrong. Please try again.'
+
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText }])
       if (data.sessionId) setSessionId(data.sessionId)
       // Sync remaining count from server — avoids stale client decrement
       if (typeof data.remainingMessages === 'number') {
