@@ -2,11 +2,14 @@
  * GET /api/admin/seed-beta
  * GET /api/admin/seed-beta?userId=<uuid>
  *
- * Grants full beta access for testing:
- *  - Upserts a row into beta_access (server-side paywall bypass via isBetaUser())
- *  - Sets remaining_chat_messages = 999 on the users table
- *  - Sets unlock_status = true on the users table
- * No auth required — test convenience endpoint.
+ * Grants full access for testing by directly updating the users table.
+ * Does NOT depend on the beta_access table existing.
+ *
+ * Sets on the user row:
+ *   remaining_chat_messages = 999
+ *   unlock_status = true
+ *
+ * Also attempts beta_access upsert if that table exists (best-effort).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,7 +18,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 export async function GET(req: NextRequest) {
   const sb = getAdminClient()
 
-  // 1. Find the most recently created users
+  // 1. Find recent users
   const { data: users, error: usersErr } = await sb
     .from('users')
     .select('id, email, created_at')
@@ -29,26 +32,12 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // Allow ?userId=<uuid> to target a specific user, otherwise use the latest
   const requestedId = req.nextUrl.searchParams.get('userId')
   const target = requestedId
     ? (users.find(u => u.id === requestedId) ?? users[0])
     : users[0]
 
-  // 2. Upsert into beta_access (server-side bypass via isBetaUser())
-  const { error: betaErr } = await sb
-    .from('beta_access')
-    .upsert(
-      {
-        user_id: target.id,
-        code_used: 'ADMIN_SEED',
-        activated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    )
-
-  // 3. Also update users table directly — ensures chat and reading work
-  //    even before the client store is refreshed
+  // 2. Update users table — this is the critical step, works without any migration
   const { error: userUpdateErr } = await sb
     .from('users')
     .update({
@@ -57,24 +46,28 @@ export async function GET(req: NextRequest) {
     })
     .eq('id', target.id)
 
-  if (betaErr || userUpdateErr) {
+  if (userUpdateErr) {
     return NextResponse.json(
-      {
-        error: 'Partial failure — see details',
-        betaErr: betaErr?.message ?? null,
-        userUpdateErr: userUpdateErr?.message ?? null,
-      },
+      { error: 'Failed to update users table', detail: userUpdateErr.message },
       { status: 500 },
     )
   }
 
-  // 4. Verify
-  const { data: verification } = await sb
-    .from('beta_access')
-    .select('user_id, code_used, activated_at')
-    .eq('user_id', target.id)
-    .maybeSingle()
+  // 3. Best-effort: upsert into beta_access if the table exists
+  let betaNote = 'skipped (table may not exist yet)'
+  try {
+    const { error: betaErr } = await sb
+      .from('beta_access')
+      .upsert(
+        { user_id: target.id, code_used: 'ADMIN_SEED', activated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      )
+    betaNote = betaErr ? `failed: ${betaErr.message}` : 'inserted'
+  } catch {
+    betaNote = 'table does not exist — not needed, users table update is sufficient'
+  }
 
+  // 4. Confirm what was written
   const { data: userRow } = await sb
     .from('users')
     .select('id, remaining_chat_messages, unlock_status')
@@ -87,9 +80,9 @@ export async function GET(req: NextRequest) {
       userId: target.id,
       email: target.email,
     },
-    betaAccessRow: verification,
     userRow,
+    betaAccess: betaNote,
     recentUsers: users.map(u => ({ id: u.id, email: u.email, createdAt: u.created_at })),
-    message: `Full access granted to ${target.email ?? target.id}. remaining_chat_messages=999, unlock_status=true, beta_access row inserted.`,
+    message: `Access granted to ${target.email ?? target.id}. remaining_chat_messages=999, unlock_status=true.`,
   })
 }
