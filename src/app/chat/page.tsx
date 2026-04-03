@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { FuturaLogo, PremiumButton } from '@/components/shared'
 import { useSessionStore } from '@/store'
 import { Suspense } from 'react'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,12 +83,14 @@ function UpgradeModal({
   name,
   focusArea,
   emotionalPattern,
+  lastMessage,
   onDismiss,
   onUpgrade,
 }: {
   name: string | null
   focusArea: string | null
   emotionalPattern: string | null
+  lastMessage: string | null
   onDismiss: () => void
   onUpgrade: () => void
 }) {
@@ -98,16 +101,19 @@ function UpgradeModal({
   const emotional = emotionalPattern?.replace(/_/g, ' ')
 
   const headline = name
-    ? `${name}, you reached the limit at exactly the right moment`
-    : 'You reached the limit at exactly the right moment'
+    ? `${name}, this is where it was about to land`
+    : 'This is where it was about to land'
+
+  // Body references what was specifically being asked about
+  const topicPhrase = lastMessage
+    ? lastMessage.trim().split(/\s+/).slice(0, 6).join(' ').replace(/[?.!]+$/, '')
+    : null
 
   const body = emotional && focusLabel
-    ? `The questions you've been asking are the kind that reveal ${emotional} patterns most clearly. To go deeper on your ${focusLabel}, continue with unlimited conversations.`
-    : emotional
-      ? `The questions you've been asking are the kind that reveal ${emotional} patterns most clearly. The conversation was building toward the most important part.`
-      : focusLabel
-        ? `The questions you've been asking are exactly the kind that unlock the deepest ${focusLabel} patterns. Continue with unlimited conversations.`
-        : `The conversation was building toward the most important part of your pattern. Don't stop here.`
+    ? `The ${emotional} pattern — the one you've been asking about — tends to circle before it resolves. ${topicPhrase ? `"${topicPhrase}..." — that's exactly where the pattern was about to get specific.` : `The next message is where it would have resolved.`}`
+    : focusLabel
+      ? `What you've been asking about your ${focusLabel} was building toward a specific point. ${topicPhrase ? `That question — "${topicPhrase}..." — was the one that would have landed.` : 'That point is in the next message.'}`
+      : `The conversation was at the edge of something specific. That's where it stopped.`
 
   return (
     <div style={{
@@ -141,7 +147,7 @@ function UpgradeModal({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <PremiumButton onClick={onUpgrade} size="md">
-            Continue this conversation
+            Send the next message
           </PremiumButton>
           <button
             onClick={onDismiss}
@@ -179,6 +185,7 @@ function ChatPageInner() {
   const [advisorName, setAdvisorName] = useState<string | null>(null)
   const [userFocusArea, setUserFocusArea] = useState<string | null>(null)
   const [userEmotionalPattern, setUserEmotionalPattern] = useState<string | null>(null)
+  const [paywallLastMessage, setPaywallLastMessage] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -188,6 +195,8 @@ function ChatPageInner() {
 
     // Show typing indicator while fetching personalized opening message
     setSending(true)
+
+    track(userId, 'chat_started')
 
     // Fetch personalized opening message and suggested prompts in parallel
     Promise.all([
@@ -230,6 +239,8 @@ function ChatPageInner() {
     setInput('')
     setSending(true)
 
+    track(userId, 'message_sent', { focusArea: userFocusArea })
+
     try {
       const res = await fetch('/api/chat/send', {
         method: 'POST',
@@ -237,10 +248,27 @@ function ChatPageInner() {
         body: JSON.stringify({ userId, sessionId, message: text }),
       })
 
-      if (res.status === 402) { setSending(false); setShowPaywall(true); return }
+      if (res.status === 402) {
+        const data = await res.json().catch(() => ({}))
+        if (data.lastMessage) setPaywallLastMessage(data.lastMessage)
+        track(userId, 'paywall_triggered_chat', { source: 'chat', focusArea: userFocusArea })
+        setSending(false); setShowPaywall(true); return
+      }
 
       const data = await res.json()
-      if (data.paywallTriggered) { setSending(false); setShowPaywall(true); return }
+      if (data.paywallTriggered) {
+        if (data.lastMessage) setPaywallLastMessage(data.lastMessage)
+        fetch('/api/analytics/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            eventName: 'paywall_triggered_chat',
+            properties: { source: 'chat', focusArea: userFocusArea },
+          }),
+        }).catch(() => {})
+        setSending(false); setShowPaywall(true); return
+      }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       if (data.sessionId) setSessionId(data.sessionId)
@@ -467,6 +495,7 @@ function ChatPageInner() {
           name={advisorName}
           focusArea={userFocusArea}
           emotionalPattern={userEmotionalPattern}
+          lastMessage={paywallLastMessage}
           onDismiss={() => setShowPaywall(false)}
           onUpgrade={() => router.push('/unlock?source=chat')}
         />

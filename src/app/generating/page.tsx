@@ -52,10 +52,12 @@ export default function GeneratingPage() {
       }, 1800 * (i + 1))
     })
 
-    // Navigate after full animation
+    // Navigate after animation. The reading was generated before this page loaded,
+    // so we go straight to /reading. If it's somehow not ready, /reading shows the
+    // fallback teaser — no dead-end possible.
     const timeout = setTimeout(() => {
       setDone(true)
-      setTimeout(() => router.push('/reading'), 600)
+      setTimeout(() => router.replace('/reading'), 600)
     }, STEPS.length * 1600 + 800)
 
     return () => { clearInterval(interval); clearTimeout(timeout) }

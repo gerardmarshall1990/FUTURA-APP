@@ -1,15 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { trackEvent } from '@/services/analyticsService'
+import { trackEvent, trackEngagementEvent } from '@/services/analyticsService'
 import { getAdminClient } from '@/lib/supabase/admin'
 
-// Events that represent meaningful user engagement.
-// These update last_active_at so lifecycle state stays accurate.
-const ENGAGEMENT_EVENTS = new Set([
-  'chat_message_sent',
-  'teaser_viewed',
-  'full_reading_viewed',
-  'home_visited',
+// Events that update last_active_at — drives lifecycle state accuracy.
+const ACTIVITY_EVENTS = new Set([
+  'app_opened',
+  'reading_viewed',
+  'cut_reached',
   'chat_started',
+  'message_sent',
+  'chat_message_sent',  // legacy
+  'teaser_viewed',      // legacy
+  'full_reading_viewed',
+  'insight_viewed',
+  'trigger_clicked',
+  'home_visited',
+])
+
+// Funnel events written to engagement_events for SQL funnel queries.
+// Includes userId, lifecycleState, focusArea, source, timestamp.
+const FUNNEL_EVENTS = new Set([
+  'onboarding_started',
+  'onboarding_completed',
+  'palm_scan_started',
+  'palm_scan_completed',
+  'reading_generated',
+  'reading_viewed',
+  'cut_reached',
+  'paywall_viewed',
+  'unlock_clicked',
+  'unlock_completed',
+  'chat_started',
+  'message_sent',
+  'paywall_triggered_chat',
+  'app_opened',
+  'trigger_clicked',
+  'insight_viewed',
 ])
 
 export async function POST(req: NextRequest) {
@@ -20,16 +46,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'eventName required' }, { status: 400 })
     }
 
-    // Write analytics event
-    await trackEvent(userId ?? null, eventName, properties)
+    const uid = userId ?? null
 
-    // Update last_active_at for engagement events — non-blocking
-    // This is what drives lifecycle state (paid_active / paid_inactive / at_risk_churn)
-    if (userId && ENGAGEMENT_EVENTS.has(eventName)) {
+    // Write to analytics_events (PostHog-style log)
+    await trackEvent(uid, eventName, properties)
+
+    // Write to engagement_events for funnel SQL queries
+    if (FUNNEL_EVENTS.has(eventName)) {
+      void trackEngagementEvent(
+        uid,
+        eventName,
+        {
+          lifecycleState: properties?.lifecycleState as string ?? null,
+          focusArea:      properties?.focusArea      as string ?? null,
+          source:         properties?.source         as string ?? null,
+        },
+        // session_id + everything else that isn't a top-level context field
+        Object.fromEntries(
+          Object.entries(properties ?? {}).filter(([k]) => !['lifecycleState','focusArea','source'].includes(k))
+        ),
+      )
+    }
+
+    // Update last_active_at for engagement events
+    if (uid && ACTIVITY_EVENTS.has(eventName)) {
       void getAdminClient()
         .from('users')
         .update({ last_active_at: new Date().toISOString() })
-        .eq('id', userId)
+        .eq('id', uid)
     }
 
     return NextResponse.json({ ok: true })

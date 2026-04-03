@@ -7,7 +7,8 @@ import { shouldTriggerPaywall } from '@/services/stripeService'
 import { assembleUserContext } from '@/services/profileOrchestrator'
 import { writeMemory } from '@/services/memoryService'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { isAdminUser } from '@/lib/adminBypass'
+import { isBetaUser } from '@/lib/betaAccess'
+import { trackEngagementEvent } from '@/services/analyticsService'
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,10 +32,12 @@ export async function POST(req: NextRequest) {
 
     const isSubscribed = user.subscription_status === 'active'
     const isUnlocked   = user.unlock_status || isSubscribed
-    const adminBypass  = isAdminUser(userId)
+    // Admin and beta users skip all paywall checks
+    const fullBypass   = await isBetaUser(userId)   // includes admin bypass
 
-    if (!adminBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
-      return NextResponse.json({ paywallTriggered: true }, { status: 402 })
+    if (!fullBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
+      // Include message so the modal can reflect what was being explored
+      return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
     }
 
     // ── 2. Assemble full unified context ───────────────────────────────────────
@@ -64,10 +67,10 @@ export async function POST(req: NextRequest) {
     ])
 
     // ── 4. High-intent paywall check (AI — only on last free message) ──────────
-    if (!isUnlocked && user.remaining_chat_messages === 1) {
+    if (!fullBypass && !isUnlocked && user.remaining_chat_messages === 1) {
       const intent = await classifyMessageIntent(message, ctx.focusArea as never)
       if (intent === 'high_intent') {
-        return NextResponse.json({ paywallTriggered: true }, { status: 402 })
+        return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
       }
     }
 
@@ -105,6 +108,10 @@ export async function POST(req: NextRequest) {
         event_name: 'chat_message_sent',
         properties: { session_id: activeSessionId, remaining: newCount, lifecycle: ctx.lifecycleState },
       }),
+      trackEngagementEvent(userId, 'message_sent', {
+        lifecycleState: ctx.lifecycleState,
+        focusArea:      ctx.focusArea,
+      }, { session_id: activeSessionId, remaining: newCount }),
     ])
 
     // ── 7. Memory extraction — every 6 user messages (non-blocking) ────────────

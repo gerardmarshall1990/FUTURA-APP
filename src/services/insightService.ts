@@ -65,6 +65,7 @@ export async function generateAndStoreInsight(userId: string): Promise<DailyInsi
     allMemoryThemes,
     daysSinceReading,
     ctx.palmFeatures,
+    ctx.palmFeatures?.reading_anchor ?? null,
   )
 
   const today = new Date().toISOString().split('T')[0]

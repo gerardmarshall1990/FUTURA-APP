@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { assembleUserContext } from '@/services/profileOrchestrator'
-import { buildAdvisorOpeningMessage } from '@/lib/prompts/advisorPrompt'
+import { generateChatOpening } from '@/services/aiService'
 
-const FALLBACK = "I've reviewed your reading. What would you like to explore?"
+const FALLBACK = "Your reading pointed somewhere specific. What's the part you've been sitting with?"
 
 const EMPTY = { message: FALLBACK, name: null, focusArea: null, emotionalPattern: null }
 
@@ -16,8 +16,12 @@ export async function GET(req: NextRequest) {
     const ctx = await assembleUserContext(userId)
     if (!ctx) return NextResponse.json(EMPTY)
 
+    // generateChatOpening: AI-generated when teaserText exists (references reading + palm anchor),
+    // falls back to deterministic pattern × focusArea opener when no reading is available yet.
+    const message = await generateChatOpening(ctx)
+
     return NextResponse.json({
-      message:          buildAdvisorOpeningMessage(ctx),
+      message,
       name:             ctx.firstName,
       focusArea:        ctx.focusArea,
       emotionalPattern: ctx.emotionalPattern,

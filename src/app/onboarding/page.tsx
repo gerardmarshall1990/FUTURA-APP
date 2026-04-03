@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, ProgressBar, PremiumButton, Orb } from '@/components/shared'
 import { useOnboardingStore, useSessionStore } from '@/store'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Life Path Number ─────────────────────────────────────────────────────────
 
@@ -511,6 +512,8 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       streamRef.current = stream
       setPhase('camera')
       timerRef.current = setInterval(analyzeFrame, 800)
+      // Track palm scan started
+      track(userId, 'palm_scan_started')
     } catch {
       setCameraBlocked(true)
     }
@@ -598,6 +601,8 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       setScanQuality(quality)
       setFeedback(json.feedback ?? '')
       setPhase('result')
+      // Track palm scan completed (any quality that produced a result)
+      track(userId, 'palm_scan_completed', { quality })
       if (quality === 'good') { await palmDelay(800); onNext() }
     } catch {
       // Network error — service problem, not a palm quality problem
@@ -909,9 +914,10 @@ function OptionCard({ label, selected, onSelect }: { label: string; selected: bo
 
 // ─── Question Screen ──────────────────────────────────────────────────────────
 
-function QuestionScreen({ question, options, selected, onSelect, onNext, stepNumber }: {
+function QuestionScreen({ question, options, selected, onSelect, onNext, stepNumber, loading }: {
   question: string; options: { value: string; label: string }[]
   selected: string | null; onSelect: (v: string) => void; onNext: () => void; stepNumber: number
+  loading?: boolean
 }) {
   return (
     <div className="animate-fade-up" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1rem' }}>
@@ -924,7 +930,9 @@ function QuestionScreen({ question, options, selected, onSelect, onNext, stepNum
           <OptionCard key={opt.value} label={opt.label} selected={selected === opt.value} onSelect={() => onSelect(opt.value)} />
         ))}
       </div>
-      <PremiumButton onClick={onNext} disabled={!selected} size="lg">Continue</PremiumButton>
+      <PremiumButton onClick={onNext} disabled={!selected} loading={loading} size="lg">
+        {loading ? 'Building your reading...' : 'Continue'}
+      </PremiumButton>
     </div>
   )
 }
@@ -938,6 +946,14 @@ export default function OnboardingPage() {
   const { userId } = useSessionStore()
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(false)
+
+  // Fire onboarding_started once on mount
+  useEffect(() => {
+    if (!userId) return
+    track(userId, 'onboarding_started')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   const totalSteps = 8 // 3 new + palm + 4 questions
 
@@ -978,6 +994,9 @@ export default function OnboardingPage() {
         }),
       })
 
+      // Track onboarding_completed before kicking off reading generation
+      track(userId, 'onboarding_completed', { focusArea: store.focusArea })
+
       await fetch('/api/reading/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -987,6 +1006,7 @@ export default function OnboardingPage() {
       router.push('/generating')
     } catch {
       setSubmitting(false)
+      setSubmitError(true)
     }
   }
 
@@ -1013,6 +1033,24 @@ export default function OnboardingPage() {
         <TopBar showBack onBack={handleBack} />
         <ProgressBar step={step + 1} total={totalSteps} />
 
+        {/* Generation error — only shown if reading/profile creation fails */}
+        {submitError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0.75rem 1rem',
+            marginBottom: '0.75rem',
+          }}>
+            <p style={{
+              fontFamily: 'var(--font-body)', fontSize: '0.82rem',
+              color: 'rgba(239,68,68,0.85)', lineHeight: 1.5,
+            }}>
+              Something interrupted your reading. Tap Continue again to retry.
+            </p>
+          </div>
+        )}
+
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', paddingBottom: '2rem' }}>
           {step === 0 && <NameScreen onNext={handleNext} />}
           {step === 1 && <DobScreen onNext={handleNext} />}
@@ -1027,6 +1065,7 @@ export default function OnboardingPage() {
               onSelect={setters[currentQuestion.id]}
               onNext={step === totalSteps - 1 ? () => { if (!submitting) handleFinalNext() } : handleNext}
               stepNumber={step + 1}
+              loading={step === totalSteps - 1 ? submitting : false}
             />
           )}
         </div>

@@ -168,6 +168,15 @@ export function assemblePromptContext(ctx: FullUserContext): string {
 
   const sections: string[] = [lines.filter(Boolean).join('\n')]
 
+  // Reading anchor — the synthesized primary palm description.
+  // Surfaced first, as a named section, so chat and reading AI both inherit it
+  // as the explicit starting point for any palm reference.
+  if (ctx.palmFeatures?.reading_anchor) {
+    sections.push(
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nREADING ANCHOR — Primary Palm Synthesis\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${ctx.palmFeatures.reading_anchor}\n\nAll palm references in this conversation should be grounded in this anchor first. Only use the detailed feature descriptions below when the anchor alone is insufficient.`
+    )
+  }
+
   // Palm — raw observed features (physical identity layer)
   // Positioned immediately after identity so all downstream context inherits it
   if (ctx.palmFeatures) {

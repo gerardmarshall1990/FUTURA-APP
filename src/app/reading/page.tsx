@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import { track } from '@/lib/clientAnalytics'
 
 interface Reading {
   id: string
@@ -144,6 +145,8 @@ export default function ReadingPage() {
   const { userId } = useSessionStore()
   const [reading, setReading] = useState<Reading | null>(null)
   const [loading, setLoading] = useState(true)
+  const cutZoneRef = useRef<HTMLDivElement>(null)
+  const cutTrackedRef = useRef(false)
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
@@ -169,17 +172,30 @@ export default function ReadingPage() {
           })
         }
         setLoading(false)
-        fetch('/api/analytics/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, eventName: 'teaser_viewed' }),
-        }).catch(() => {})
+        track(userId, 'reading_viewed', { focusArea: data?.focusArea ?? null })
       })
       .catch(() => {
         setReading(null)
         setLoading(false)
       })
   }, [userId, router])
+
+  // Track cut_reached when the cut zone scrolls into view
+  useEffect(() => {
+    if (!cutZoneRef.current || cutTrackedRef.current) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !cutTrackedRef.current) {
+          cutTrackedRef.current = true
+          track(userId, 'cut_reached', { focusArea: reading?.focusArea ?? null })
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.5 }
+    )
+    observer.observe(cutZoneRef.current)
+    return () => observer.disconnect()
+  }, [userId, reading, loading])
 
   if (loading) {
     return (
@@ -203,7 +219,12 @@ export default function ReadingPage() {
   const cutLine = reading?.cutLine || 'What follows from this is the part most people do not see until after the window has already passed —'
 
   function goToUnlock() {
+    track(userId, 'paywall_viewed', { source: 'reading', focusArea })
     router.push('/unlock?source=reading')
+  }
+
+  function goToFullReading() {
+    router.push('/full-reading')
   }
 
   return (
@@ -237,8 +258,8 @@ export default function ReadingPage() {
             <ReadingParagraph key={i} text={para} index={i} />
           ))}
 
-          {/* Cut zone with context — always shown */}
-          <div className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
+          {/* Cut zone with context — always shown. ref used for cut_reached event. */}
+          <div ref={cutZoneRef} className="animate-fade-up" style={{ animationDelay: `${0.15 + paragraphs.length * 0.12}s` }}>
             <CutZone
               cutLine={cutLine}
               lockedPreview={reading?.lockedText?.slice(0, 90) ?? ''}
@@ -250,7 +271,7 @@ export default function ReadingPage() {
         <div style={{ height: '3rem' }} />
       </div>
 
-      {/* Sticky unlock CTA */}
+      {/* Sticky CTA — unlocked users go to full reading; locked users go to paywall */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
         padding: '1rem 1.25rem 2rem',
@@ -259,19 +280,35 @@ export default function ReadingPage() {
         gap: '0.4rem', zIndex: 10,
       }}>
         <div style={{ width: '100%', maxWidth: 420 }}>
-          <PremiumButton onClick={goToUnlock} size="lg">
-            {name ? `Continue ${name}'s reading` : 'Continue my reading'}
-          </PremiumButton>
-
-          <p style={{
-            textAlign: 'center', marginTop: '0.5rem',
-            color: 'var(--text-muted)', fontSize: '0.7rem',
-            letterSpacing: '0.03em',
-          }}>
-            {hoursRemaining && hoursRemaining > 0
-              ? `Still held for you · One-time from $4.99`
-              : 'One-time from $4.99 · No subscription required'}
-          </p>
+          {reading?.isUnlocked ? (
+            <>
+              <PremiumButton onClick={goToFullReading} size="lg">
+                {name ? `Read ${name}'s full reading` : 'Read full reading'}
+              </PremiumButton>
+              <p style={{
+                textAlign: 'center', marginTop: '0.5rem',
+                color: 'var(--text-muted)', fontSize: '0.7rem',
+                letterSpacing: '0.03em',
+              }}>
+                Full reading unlocked
+              </p>
+            </>
+          ) : (
+            <>
+              <PremiumButton onClick={goToUnlock} size="lg">
+                {name ? `Continue ${name}'s reading` : 'Continue my reading'}
+              </PremiumButton>
+              <p style={{
+                textAlign: 'center', marginTop: '0.5rem',
+                color: 'var(--text-muted)', fontSize: '0.7rem',
+                letterSpacing: '0.03em',
+              }}>
+                {hoursRemaining && hoursRemaining > 0
+                  ? `Still held for you · One-time from $4.99`
+                  : 'One-time from $4.99 · No subscription required'}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </main>

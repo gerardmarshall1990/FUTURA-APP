@@ -31,6 +31,8 @@ import {
 import {
   buildAdvisorSystemPrompt,
   buildAdvisorOpeningMessage,
+  CHAT_OPENING_SYSTEM_PROMPT,
+  buildChatOpeningUserPrompt,
   INTENT_CLASSIFICATION_PROMPT,
   buildIntentClassificationPrompt,
 } from '@/lib/prompts/advisorPrompt'
@@ -375,6 +377,40 @@ export function getAdvisorOpeningMessage(ctx: FullUserContext): string {
   return buildAdvisorOpeningMessage(ctx)
 }
 
+/**
+ * Generates an AI-powered chat opening when a reading is available.
+ * References the actual teaser text and reading_anchor so the first message
+ * feels like a continuation of what the user just read, not a reset.
+ *
+ * Falls back to the deterministic opener if AI call fails.
+ */
+export async function generateChatOpening(ctx: FullUserContext): Promise<string> {
+  if (!ctx.teaserText) return buildAdvisorOpeningMessage(ctx)
+
+  try {
+    const userPrompt = buildChatOpeningUserPrompt(
+      ctx.firstName,
+      ctx.teaserText,
+      ctx.palmFeatures?.reading_anchor ?? null,
+      ctx.corePattern,
+      ctx.focusArea,
+    )
+
+    const result = await complete(
+      CHAT_OPENING_SYSTEM_PROMPT,
+      userPrompt,
+      'fast',   // gpt-4o-mini — keeps latency low for opening message
+      120,
+      0.72,
+    )
+
+    const opener = result.trim()
+    return opener || buildAdvisorOpeningMessage(ctx)
+  } catch {
+    return buildAdvisorOpeningMessage(ctx)
+  }
+}
+
 // ─── Memory Services ──────────────────────────────────────────────────────────
 
 export interface MemoryTheme {
@@ -471,6 +507,7 @@ export async function generateDailyInsight(
   memoryThemes: MemoryTheme[],
   daysSinceReading: number,
   palmFeatures?: PalmFeatures | null,
+  readingAnchor?: string | null,
 ): Promise<string> {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const dayOfWeek = days[new Date().getDay()]
@@ -490,6 +527,7 @@ export async function generateDailyInsight(
       dayOfWeek,
       daysSinceReading,
       palmFeatures ? buildPalmContext(palmFeatures) : undefined,
+      readingAnchor ?? undefined,
     ),
     'fast',
     200,
@@ -571,15 +609,74 @@ export interface TriggerCopy {
   subtext: string
 }
 
+// Per-trigger framing map — tells the AI the exact structural job for each trigger type.
+// Each entry names: (1) what concrete reference to anchor to, (2) what implication angle to use.
+// Injected into the user prompt per-call; system prompt handles universal output rules.
+const TRIGGER_TYPE_GUIDANCE: Record<string, string> = {
+  fomo_reading_preview:
+    'REFERENCE: What the reading has documented about them — use the palm anchor or emotional pattern as the specific thing waiting.\n' +
+    'IMPLICATION: The window angle — the reading captures a moment that does not stay readable indefinitely.\n' +
+    'Example: {"headline": "Your reading named something. You haven\'t seen it yet.", "subtext": "The moment this pattern tends to change is documented. Most people miss it while it\'s still open."}',
+
+  fomo_insight_tease:
+    'REFERENCE: The specific pattern dimension (emotional pattern or focus area) that insights are building on.\n' +
+    'IMPLICATION: The accumulation risk — daily context is generating without them; the gap grows.\n' +
+    'Example: {"headline": "Insights on your relationship pattern are going unread.", "subtext": "The point where your pattern usually stalls — it\'s being tracked. You\'re not seeing it."}',
+
+  fomo_chat_limit:
+    'REFERENCE: What was actually being explored when the thread cut off — use the last memory key or focus area.\n' +
+    'IMPLICATION: The loss angle — the thread was arriving somewhere and stopped there.\n' +
+    'Example: {"headline": "The direction question you were mid-thread on.", "subtext": "The pattern you described was about to reach the specific part. It stopped at exactly that point."}',
+
+  continuation_unresolved:
+    'REFERENCE: Pull from memory descriptions — use the actual topic or behavior the user named, not a label for it.\n' +
+    'IMPLICATION: The stasis risk — the gap between sessions does not dissolve the pattern; it hardens it.\n' +
+    'Example: {"headline": "The relationship question you left unfinished.", "subtext": "The pattern you described hasn\'t resolved — it\'s the same point you keep returning to."}',
+
+  escalation_pattern_shift:
+    'REFERENCE: Something that has visibly shifted in their pattern arc since the reading — use palm anchor or memory arc.\n' +
+    'IMPLICATION: The timing window — what became visible now has a closing point.\n' +
+    'Example: {"headline": "What your reading pointed at has moved.", "subtext": "The point where your love pattern usually holds — it\'s breaking differently now. That window is specific."}',
+
+  reactivation_insight:
+    'REFERENCE: The focus area or emotional pattern arc — what was being navigated when they last engaged.\n' +
+    'IMPLICATION: The drift risk — time away does not mean the pattern paused; it means they lost the thread.\n' +
+    'Example: {"headline": "The situation you were navigating has shifted since.", "subtext": "The moment this tends to change passed while you were away. There\'s a new read on it now."}',
+
+  reactivation_pattern_update:
+    'REFERENCE: Name the actual thread from memory descriptions — the specific topic or behavior, not "your themes".\n' +
+    'IMPLICATION: The calcification risk — the pattern did not resolve itself while they were gone.\n' +
+    'Example: {"headline": "The career decision you were circling is still open.", "subtext": "The point where you usually stall hasn\'t cleared. Three weeks later — still the same edge."}',
+
+  churn_prevention_value:
+    'REFERENCE: A specific behavioral pattern or palm-anchored observation — something concrete that has been tracked.\n' +
+    'IMPLICATION: Direct loss framing — name what they would have seen if they had stayed. No urgency theater.\n' +
+    'Example: {"headline": "Your love pattern moved twice while you were away.", "subtext": "The point you described — where decisions stall — it surfaced again. It was documented."}',
+
+  retention_daily_insight:
+    'REFERENCE: The emotional pattern + what today specifically tends to ask of someone carrying it.\n' +
+    'IMPLICATION: The timing specificity — today is not a generic day for this pattern.\n' +
+    'Example: {"headline": "Today tends to be the day your pattern shows up loudest.", "subtext": "The point where you usually override what you\'re sensing — that\'s what today is asking about."}',
+
+  retention_suggested_prompt:
+    'REFERENCE: A specific angle from their focus area or recent memory that has not yet been explored.\n' +
+    'IMPLICATION: The gap angle — there is a dimension of their pattern the advisor has not been asked about.\n' +
+    'Example: {"headline": "There\'s one angle of your pattern you haven\'t asked about.", "subtext": "The part underneath the direction question — the advisor hasn\'t been pointed there yet."}',
+}
+
 const TRIGGER_COPY_SYSTEM_PROMPT = `You are writing personalized re-engagement copy for a palmistry and pattern advisor app called Futura.
 
-You will receive a user's profile and a trigger type. Write ONE headline and ONE subtext line.
+You will receive a user's profile, a trigger type, and per-type framing instructions. Write ONE headline and ONE subtext line.
 
-Rules:
-- Headline: max 10 words. Specific. References something real about this person.
-- Subtext: max 20 words. Explains what they're missing or what has shifted. Specific to their focus and emotional pattern.
-- Never generic. Never "your journey". Never "the universe". Never motivational.
-- Never "Something shifted" alone — always complete it: "Something shifted in your [specific pattern]"
+STRUCTURE — every output must contain exactly two elements:
+1. CONCRETE REFERENCE — name a specific thing: a memory theme, a pattern behavior, an anchor phrase from the reading. Never name the concept of a thing ("your pattern") without completing it ("the pattern where you override what you're sensing").
+2. IMPLICATION — state what this means right now: a shift that is happening, a risk if nothing changes, or a window that is currently open. One specific consequence, not a general observation.
+
+OUTPUT RULES:
+- Headline: max 10 words. Must contain the concrete reference.
+- Subtext: max 20 words. Must state the implication.
+- FORBIDDEN: "something shifted", "your journey", "the universe", "a new insight is ready", "a pattern has moved", any phrase that could apply to anyone
+- PREFERRED language: "the pattern you described...", "the point where you usually...", "the moment this tends to change...", "what you brought up about..."
 - Tone: direct, personal, slightly urgent. Like a trusted advisor leaving a note.
 - Return valid JSON only: {"headline": "...", "subtext": "..."}`
 
@@ -591,6 +688,7 @@ export async function generateTriggerCopy(
   memoryKeys: string[],
   starSign: string | null,
   palmFeatures?: PalmFeatures | null,
+  memoryDescriptions?: string[],
 ): Promise<TriggerCopy> {
   const name = firstName ?? 'You'
   const focus = focusArea.replace(/_/g, ' ')
@@ -602,12 +700,23 @@ export async function generateTriggerCopy(
     ? `Palm reading anchor: ${palmFeatures.reading_anchor}`
     : ''
 
+  // Memory descriptions: actual values from emotional/behavioral memory,
+  // not just the keys. Used for continuation/reactivation triggers where
+  // copy needs to reference what the user was actually dealing with.
+  const memoryDescLine = memoryDescriptions && memoryDescriptions.length > 0
+    ? `Recent memory context:\n${memoryDescriptions.slice(0, 3).map(d => `- ${d}`).join('\n')}`
+    : ''
+
+  // Per-type framing guidance — injected into prompt to shape the copy angle
+  const framing = TRIGGER_TYPE_GUIDANCE[triggerType] ?? ''
+
   const userPrompt = `Trigger type: ${triggerType}
-Name: ${name}
+${framing ? `${framing}\n` : ''}Name: ${name}
 Focus area: ${focus}
 Emotional pattern: ${emotionalPattern}
 ${starSign ? `Star sign: ${starSign}` : ''}
 ${recentMemory ? `Recent behavioral themes: ${recentMemory}` : ''}
+${memoryDescLine}
 ${palmLine}
 
 Write the headline and subtext JSON for this trigger.`

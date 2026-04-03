@@ -4,7 +4,9 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TopBar, PremiumButton, GoldDivider } from '@/components/shared'
 import { useSessionStore } from '@/store'
+import type { PaywallStatus } from '@/services/stripeService'
 import { buildPaywallCopy, type PaywallSource, type PaywallContext } from '@/lib/paywallCopy'
+import { track } from '@/lib/clientAnalytics'
 
 // ─── Withheld Preview Card ─────────────────────────────────────────────────────
 // Shows the blurred cut line — makes the withheld content tangible and specific.
@@ -77,14 +79,52 @@ function FeatureRow({ text }: { text: string }) {
 function UnlockPageInner() {
   const router = useRouter()
   const params = useSearchParams()
-  const { userId } = useSessionStore()
+  const { userId, setUnlocked, setSubscribed, setRemainingMessages } = useSessionStore()
 
-  const source = (params.get('source') ?? 'default') as PaywallSource
+  const source      = (params.get('source') ?? 'default') as PaywallSource
+  const showBeta    = params.get('beta') === 'true'   // visible only with ?beta=true
 
   const [selected, setSelected] = useState<'unlock' | 'subscription'>('unlock')
   const [loading, setLoading] = useState(false)
   const [ctx, setCtx] = useState<PaywallContext>({})
   const [ctxLoaded, setCtxLoaded] = useState(false)
+
+  // Beta activation state — only relevant when ?beta=true
+  const [betaCode,    setBetaCode]    = useState('')
+  const [betaStatus,  setBetaStatus]  = useState<'idle' | 'loading' | 'success' | 'invalid'>('idle')
+
+  async function handleBetaActivate() {
+    if (!userId || !betaCode.trim()) return
+    setBetaStatus('loading')
+    try {
+      const res = await fetch('/api/beta/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, code: betaCode.trim() }),
+      })
+      if (res.ok) {
+        // Refresh paywall status so the store reflects beta access immediately
+        try {
+          const statusRes = await fetch(`/api/paywall/status?userId=${userId}`)
+          const status: PaywallStatus = await statusRes.json()
+          if (status.isSubscribed) {
+            setSubscribed()
+          } else if (status.isUnlocked) {
+            setUnlocked()
+          }
+          setRemainingMessages(status.remainingMessages ?? 999)
+        } catch { /* store will be refreshed on next page load */ }
+
+        setBetaStatus('success')
+        // Redirect directly into the unlocked reading experience
+        setTimeout(() => router.replace('/full-reading'), 1800)
+      } else {
+        setBetaStatus('invalid')
+      }
+    } catch {
+      setBetaStatus('invalid')
+    }
+  }
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
@@ -101,13 +141,12 @@ function UnlockPageInner() {
           palmReadingAnchor: data.palmReadingAnchor  ?? null,
           exposureCount:     data.exposureCount      ?? 0,
         })
-        // Fire paywall_viewed AFTER reading the count so this visit
-        // increments the counter for the NEXT visit (not this one)
-        fetch('/api/analytics/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, eventName: 'paywall_viewed' }),
-        }).catch(() => {})
+        // Fire paywall_viewed with source so funnel queries can segment by entry point
+        track(userId, 'paywall_viewed', {
+          source,
+          focusArea: data.focusArea ?? null,
+          exposure_count: data.exposureCount ?? 0,
+        })
       })
       .catch(() => {})
       .finally(() => setCtxLoaded(true))
@@ -120,6 +159,9 @@ function UnlockPageInner() {
   async function handlePurchase() {
     if (!userId) return
     setLoading(true)
+
+    track(userId, 'unlock_clicked', { type: selected, source, focusArea: ctx.focusArea ?? null })
+
     try {
       const res = await fetch('/api/unlock', {
         method: 'POST',
@@ -285,6 +327,81 @@ function UnlockPageInner() {
             Secure checkout via Stripe · Instant access
           </p>
         </div>
+
+        {/* Beta code entry — only visible when ?beta=true. Not shown to normal users. */}
+        {showBeta && (
+          <div style={{
+            marginTop: '2rem',
+            borderTop: '1px solid var(--border)',
+            paddingTop: '1.25rem',
+          }}>
+            {betaStatus === 'success' ? (
+              <p style={{
+                textAlign: 'center',
+                color: '#3ecf8e',
+                fontFamily: 'var(--font-body)',
+                fontSize: '0.82rem',
+                letterSpacing: '0.04em',
+              }}>
+                ✓ Beta access activated — redirecting...
+              </p>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    value={betaCode}
+                    onChange={e => { setBetaCode(e.target.value); setBetaStatus('idle') }}
+                    onKeyDown={e => e.key === 'Enter' && handleBetaActivate()}
+                    placeholder="Beta access code"
+                    autoComplete="off"
+                    style={{
+                      flex: 1,
+                      background: 'var(--bg-card)',
+                      border: `1px solid ${betaStatus === 'invalid' ? 'rgba(239,68,68,0.5)' : 'var(--border)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      padding: '0.7rem 0.9rem',
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '0.875rem',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                      letterSpacing: '0.06em',
+                    }}
+                  />
+                  <button
+                    onClick={handleBetaActivate}
+                    disabled={betaStatus === 'loading' || !betaCode.trim()}
+                    style={{
+                      padding: '0.7rem 1rem',
+                      background: 'rgba(201,169,110,0.12)',
+                      border: '1px solid rgba(201,169,110,0.3)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--gold)',
+                      fontFamily: 'var(--font-body)',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.08em',
+                      cursor: betaStatus === 'loading' ? 'default' : 'pointer',
+                      opacity: betaStatus === 'loading' ? 0.6 : 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {betaStatus === 'loading' ? '...' : 'Activate'}
+                  </button>
+                </div>
+                {betaStatus === 'invalid' && (
+                  <p style={{
+                    marginTop: '0.4rem',
+                    color: 'rgba(239,68,68,0.75)',
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.02em',
+                  }}>
+                    Invalid code — check and try again
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
       </div>
     </main>
