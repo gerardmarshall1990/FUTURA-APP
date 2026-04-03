@@ -170,7 +170,7 @@ function UpgradeModal({
 function ChatPageInner() {
   const router = useRouter()
   const params = useSearchParams()
-  const { userId, remainingMessages, isSubscribed, isUnlocked, decrementMessages } = useSessionStore()
+  const { userId, remainingMessages, isSubscribed, isUnlocked, decrementMessages, setSubscribed, setUnlocked, setRemainingMessages } = useSessionStore()
 
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -189,6 +189,20 @@ function ChatPageInner() {
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Sync paywall status from server on mount — fixes stale store after beta activation
+  useEffect(() => {
+    if (!userId) return
+    fetch(`/api/paywall/status?userId=${userId}`)
+      .then(r => r.json())
+      .then(status => {
+        if (status.isSubscribed) setSubscribed()
+        else if (status.isUnlocked) setUnlocked()
+        if (typeof status.remainingMessages === 'number') setRemainingMessages(status.remainingMessages)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   useEffect(() => {
     if (!userId) { router.push('/'); return }
@@ -272,7 +286,12 @@ function ChatPageInner() {
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
       if (data.sessionId) setSessionId(data.sessionId)
-      decrementMessages()
+      // Sync remaining count from server — avoids stale client decrement
+      if (typeof data.remainingMessages === 'number') {
+        setRemainingMessages(data.remainingMessages)
+      } else {
+        decrementMessages()
+      }
 
       // Generate follow-up prompts non-blocking — response renders first,
       // prompts appear ~500ms later once the AI call resolves

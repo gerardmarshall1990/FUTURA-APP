@@ -2,9 +2,11 @@
  * GET /api/admin/seed-beta
  * GET /api/admin/seed-beta?userId=<uuid>
  *
- * Upserts the most recent user (or specified userId) into beta_access,
- * granting full paywall bypass for testing. No auth required — this is
- * a test-only convenience endpoint.
+ * Grants full beta access for testing:
+ *  - Upserts a row into beta_access (server-side paywall bypass via isBetaUser())
+ *  - Sets remaining_chat_messages = 999 on the users table
+ *  - Sets unlock_status = true on the users table
+ * No auth required — test convenience endpoint.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -33,8 +35,8 @@ export async function GET(req: NextRequest) {
     ? (users.find(u => u.id === requestedId) ?? users[0])
     : users[0]
 
-  // 2. Upsert into beta_access
-  const { error: upsertErr } = await sb
+  // 2. Upsert into beta_access (server-side bypass via isBetaUser())
+  const { error: betaErr } = await sb
     .from('beta_access')
     .upsert(
       {
@@ -45,18 +47,38 @@ export async function GET(req: NextRequest) {
       { onConflict: 'user_id' },
     )
 
-  if (upsertErr) {
+  // 3. Also update users table directly — ensures chat and reading work
+  //    even before the client store is refreshed
+  const { error: userUpdateErr } = await sb
+    .from('users')
+    .update({
+      remaining_chat_messages: 999,
+      unlock_status: true,
+    })
+    .eq('id', target.id)
+
+  if (betaErr || userUpdateErr) {
     return NextResponse.json(
-      { error: 'Failed to insert beta_access row', detail: upsertErr.message },
+      {
+        error: 'Partial failure — see details',
+        betaErr: betaErr?.message ?? null,
+        userUpdateErr: userUpdateErr?.message ?? null,
+      },
       { status: 500 },
     )
   }
 
-  // 3. Verify the row was written
+  // 4. Verify
   const { data: verification } = await sb
     .from('beta_access')
     .select('user_id, code_used, activated_at')
     .eq('user_id', target.id)
+    .maybeSingle()
+
+  const { data: userRow } = await sb
+    .from('users')
+    .select('id, remaining_chat_messages, unlock_status')
+    .eq('id', target.id)
     .maybeSingle()
 
   return NextResponse.json({
@@ -64,10 +86,10 @@ export async function GET(req: NextRequest) {
     grantedTo: {
       userId: target.id,
       email: target.email,
-      createdAt: target.created_at,
     },
     betaAccessRow: verification,
+    userRow,
     recentUsers: users.map(u => ({ id: u.id, email: u.email, createdAt: u.created_at })),
-    message: `Beta access granted to ${target.email ?? target.id}`,
+    message: `Full access granted to ${target.email ?? target.id}. remaining_chat_messages=999, unlock_status=true, beta_access row inserted.`,
   })
 }
