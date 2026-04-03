@@ -1,7 +1,6 @@
 export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { sendAdvisorMessage, extractMemoryThemes, classifyMessageIntent } from '@/services/aiService'
 import { shouldTriggerPaywall } from '@/services/stripeService'
 import { assembleUserContext } from '@/services/profileOrchestrator'
@@ -19,8 +18,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 1. Paywall check (fast — users table only) ─────────────────────────────
-    const supabase = createClient()
-    const { data: user, error: userError } = await supabase
+    const sb = getAdminClient()
+    const { data: user, error: userError } = await sb
       .from('users')
       .select('remaining_chat_messages, unlock_status, subscription_status')
       .eq('id', userId)
@@ -33,15 +32,13 @@ export async function POST(req: NextRequest) {
     const isSubscribed = user.subscription_status === 'active'
     const isUnlocked   = user.unlock_status || isSubscribed
     // Admin and beta users skip all paywall checks
-    const fullBypass   = await isBetaUser(userId)   // includes admin bypass
+    const fullBypass   = await isBetaUser(userId)
 
     if (!fullBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
-      // Include message so the modal can reflect what was being explored
       return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
     }
 
     // ── 2. Assemble full unified context ───────────────────────────────────────
-    // Single call — identity + memory + palm + lifecycle state all included
     const ctx = await assembleUserContext(userId)
     if (!ctx) {
       return NextResponse.json({
@@ -53,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     // ── 3. Fetch reading IDs + chat history in parallel ────────────────────────
     const [{ data: reading }, { data: historyMessages }] = await Promise.all([
-      supabase
+      sb
         .from('readings')
         .select('id, profile_id')
         .eq('user_id', userId)
@@ -61,7 +58,7 @@ export async function POST(req: NextRequest) {
         .limit(1)
         .single(),
       sessionId
-        ? supabase
+        ? sb
             .from('chat_messages')
             .select('role, content')
             .eq('session_id', sessionId)
@@ -78,7 +75,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 5. Send message — context comes entirely from ctx ──────────────────────
+    // ── 5. Send message ────────────────────────────────────────────────────────
     const history = (historyMessages ?? []).map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
@@ -89,7 +86,7 @@ export async function POST(req: NextRequest) {
     // ── 6. Persist session + messages ──────────────────────────────────────────
     let activeSessionId = sessionId
     if (!activeSessionId && reading) {
-      const { data: newSession } = await supabase
+      const { data: newSession } = await sb
         .from('chat_sessions')
         .insert({ user_id: userId, profile_id: reading.profile_id, reading_id: reading.id })
         .select()
@@ -100,14 +97,14 @@ export async function POST(req: NextRequest) {
     const newCount = isSubscribed ? 999 : Math.max(0, user.remaining_chat_messages - 1)
 
     await Promise.all([
-      supabase.from('chat_messages').insert([
+      sb.from('chat_messages').insert([
         { session_id: activeSessionId, role: 'user',      content: message },
         { session_id: activeSessionId, role: 'assistant', content: response },
       ]),
-      isSubscribed
+      fullBypass || isSubscribed
         ? Promise.resolve()
-        : supabase.from('users').update({ remaining_chat_messages: newCount }).eq('id', userId),
-      supabase.from('analytics_events').insert({
+        : sb.from('users').update({ remaining_chat_messages: newCount }).eq('id', userId),
+      sb.from('analytics_events').insert({
         user_id:    userId,
         event_name: 'chat_message_sent',
         properties: { session_id: activeSessionId, remaining: newCount, lifecycle: ctx.lifecycleState },
@@ -132,9 +129,7 @@ export async function POST(req: NextRequest) {
             ...ctx.memorySnapshot.behavioral,
             ...ctx.memorySnapshot.emotional,
           ].map(m => m.key)
-
           const themes = await extractMemoryThemes(allMessages, ctx.identitySummary, existingKeys)
-
           await Promise.all(
             themes.map(t =>
               writeMemory({
@@ -151,11 +146,7 @@ export async function POST(req: NextRequest) {
         .catch(err => console.error('[memory extraction]', err))
     }
 
-    // Update last_active_at — drives lifecycle state for reactivation logic
-    void getAdminClient()
-      .from('users')
-      .update({ last_active_at: new Date().toISOString() })
-      .eq('id', userId)
+    void sb.from('users').update({ last_active_at: new Date().toISOString() }).eq('id', userId)
 
     return NextResponse.json({ response, sessionId: activeSessionId, remainingMessages: newCount })
   } catch (err) {
