@@ -8,11 +8,18 @@ export default function AdminPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
 
-  // Also auto-detect userId from store
   const [displayId, setDisplayId] = useState<string>('loading...')
   useEffect(() => {
     setDisplayId(userId ?? 'not found — try refreshing')
   }, [userId])
+
+  function startFresh() {
+    // Clear the persisted session store so the app creates a brand-new user
+    localStorage.removeItem('futura-session')
+    localStorage.removeItem('futura-onboarding')
+    // New users auto-get full access (session/create grants unlock_status=true)
+    window.location.href = '/'
+  }
 
   async function grantAccess() {
     setStatus('loading')
@@ -67,6 +74,25 @@ export default function AdminPage() {
           {displayId}
         </p>
       </div>
+
+      {/* Start fresh — clears session and goes through onboarding as new user */}
+      <button
+        onClick={startFresh}
+        style={{
+          width: '100%',
+          padding: '0.9rem',
+          borderRadius: 8,
+          border: '1px solid #C9A96E55',
+          background: 'transparent',
+          color: '#C9A96E',
+          fontSize: '0.9rem',
+          fontFamily: 'monospace',
+          cursor: 'pointer',
+          marginBottom: '0.75rem',
+        }}
+      >
+        Start fresh (new user, full access)
+      </button>
 
       <button
         onClick={grantAccess}

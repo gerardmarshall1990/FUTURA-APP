@@ -603,7 +603,9 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
       setPhase('result')
       // Track palm scan completed (any quality that produced a result)
       track(userId, 'palm_scan_completed', { quality })
+      // Auto-advance on good or okay — only bad requires user action
       if (quality === 'good') { await palmDelay(800); onNext() }
+      if (quality === 'okay') { await palmDelay(1500); onNext() }
     } catch {
       // Network error — service problem, not a palm quality problem
       setScanQuality('okay')
@@ -818,7 +820,7 @@ function PalmUploadScreen({ onNext, stepNumber }: { onNext: () => void; stepNumb
   )
 
   // ── Phase: result ─────────────────────────────────────────────────────────────
-  const canForcePass = retakeCount >= 1  // after 1 forced retry, never block again
+  const canForcePass = true  // always allow continue — never force a retake
 
   const resultConfig = {
     good:  { color: '#3ecf8e', icon: '✓', label: 'Palm captured' },
