@@ -1,13 +1,3 @@
-/**
- * GET /api/admin/seed-beta
- * GET /api/admin/seed-beta?userId=<uuid>
- *
- * Full test-access grant. Does all of the following:
- *  1. Sets remaining_chat_messages=999 + unlock_status=true on users table
- *  2. Creates a stub user_profiles row if one doesn't exist (required for chat)
- *  3. Best-effort: inserts into beta_access if the table exists
- */
-
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { normalizeProfile } from '@/services/profileNormalizationService'
@@ -15,7 +5,6 @@ import { normalizeProfile } from '@/services/profileNormalizationService'
 export async function GET(req: NextRequest) {
   const sb = getAdminClient()
 
-  // 1. Find recent users
   const { data: users, error: usersErr } = await sb
     .from('users')
     .select('id, email, created_at')
@@ -31,10 +20,9 @@ export async function GET(req: NextRequest) {
 
   const requestedId = req.nextUrl.searchParams.get('userId')
   const target = requestedId
-    ? (users.find(u => u.id === requestedId) ?? users[0])
+    ? (users.find((u: { id: string }) => u.id === requestedId) ?? users[0])
     : users[0]
 
-  // 2. Update users table — unlock + max messages
   const { error: userUpdateErr } = await sb
     .from('users')
     .update({ remaining_chat_messages: 999, unlock_status: true })
@@ -47,8 +35,6 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  // 3. Create stub user_profiles if missing — required for assembleUserContext()
-  //    Without this, chat/send returns 404 and chat shows empty bubbles.
   const { data: existingProfile } = await sb
     .from('user_profiles')
     .select('user_id')
@@ -64,7 +50,6 @@ export async function GET(req: NextRequest) {
       ageBand: '25-34' as const,
     }
     const norm = normalizeProfile(defaults)
-
     const { error: profileErr } = await sb.from('user_profiles').insert({
       user_id: target.id,
       focus_area: defaults.focusArea,
@@ -76,18 +61,10 @@ export async function GET(req: NextRequest) {
       decision_pattern: norm.decisionPattern,
       future_theme: norm.futureTheme,
       identity_summary: norm.identitySummary,
-      first_name: null,
-      star_sign: null,
-      life_path_number: null,
-      belief_system: null,
     })
-
-    profileNote = profileErr
-      ? `failed to create: ${profileErr.message}`
-      : 'stub created (focus=life_direction, state=turning_point)'
+    profileNote = profileErr ? `failed: ${profileErr.message}` : 'stub created'
   }
 
-  // 4. Best-effort: beta_access upsert
   let betaNote = 'skipped'
   try {
     const { error: betaErr } = await sb
@@ -98,10 +75,9 @@ export async function GET(req: NextRequest) {
       )
     betaNote = betaErr ? `failed: ${betaErr.message}` : 'inserted'
   } catch {
-    betaNote = 'table does not exist — not needed'
+    betaNote = 'table does not exist'
   }
 
-  // 5. Confirm
   const { data: userRow } = await sb
     .from('users')
     .select('id, remaining_chat_messages, unlock_status')
@@ -114,7 +90,7 @@ export async function GET(req: NextRequest) {
     userRow,
     profileNote,
     betaAccess: betaNote,
-    recentUsers: users.map(u => ({ id: u.id, email: u.email, createdAt: u.created_at })),
-    message: `Done. remaining_chat_messages=999, unlock_status=true, profile: ${profileNote}`,
+    recentUsers: users.map((u: { id: string; email: string; createdAt: string }) => ({ id: u.id, email: u.email })),
+    message: `Done. User ${target.id} has full access.`,
   })
 }

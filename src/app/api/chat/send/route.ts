@@ -17,7 +17,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'userId and message required' }, { status: 400 })
     }
 
-    // ── 1. Paywall check (fast — users table only) ─────────────────────────────
     const sb = getAdminClient()
     const { data: user, error: userError } = await sb
       .from('users')
@@ -31,14 +30,12 @@ export async function POST(req: NextRequest) {
 
     const isSubscribed = user.subscription_status === 'active'
     const isUnlocked   = user.unlock_status || isSubscribed
-    // Admin and beta users skip all paywall checks
     const fullBypass   = await isBetaUser(userId)
 
     if (!fullBypass && shouldTriggerPaywall(user.remaining_chat_messages, message, isUnlocked, isSubscribed)) {
       return NextResponse.json({ paywallTriggered: true, lastMessage: message }, { status: 402 })
     }
 
-    // ── 2. Assemble full unified context ───────────────────────────────────────
     const ctx = await assembleUserContext(userId)
     if (!ctx) {
       return NextResponse.json({
@@ -48,7 +45,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ── 3. Fetch reading IDs + chat history in parallel ────────────────────────
     const [{ data: reading }, { data: historyMessages }] = await Promise.all([
       sb
         .from('readings')
@@ -67,7 +63,6 @@ export async function POST(req: NextRequest) {
         : Promise.resolve({ data: [] }),
     ])
 
-    // ── 4. High-intent paywall check (AI — only on last free message) ──────────
     if (!fullBypass && !isUnlocked && user.remaining_chat_messages === 1) {
       const intent = await classifyMessageIntent(message, ctx.focusArea as never)
       if (intent === 'high_intent') {
@@ -75,15 +70,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 5. Send message ────────────────────────────────────────────────────────
-    const history = (historyMessages ?? []).map(m => ({
+    const history = (historyMessages ?? []).map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }))
 
     const response = await sendAdvisorMessage(ctx, history, message)
 
-    // ── 6. Persist session + messages ──────────────────────────────────────────
     let activeSessionId = sessionId
     if (!activeSessionId && reading) {
       const { data: newSession } = await sb
@@ -94,7 +87,7 @@ export async function POST(req: NextRequest) {
       activeSessionId = newSession?.id
     }
 
-    const newCount = isSubscribed ? 999 : Math.max(0, user.remaining_chat_messages - 1)
+    const newCount = fullBypass || isSubscribed ? 999 : Math.max(0, user.remaining_chat_messages - 1)
 
     await Promise.all([
       sb.from('chat_messages').insert([
@@ -115,7 +108,6 @@ export async function POST(req: NextRequest) {
       }, { session_id: activeSessionId, remaining: newCount }),
     ])
 
-    // ── 7. Memory extraction — every 6 user messages (non-blocking) ────────────
     const totalUserMessages = history.filter(m => m.role === 'user').length + 1
     if (totalUserMessages % 6 === 0) {
       const allMessages = [

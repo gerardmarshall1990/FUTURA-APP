@@ -45,6 +45,12 @@ export default function LandingPage() {
       const res = await fetch('/api/session/create', { method: 'POST' })
       const { userId, guestId } = await res.json()
       setSession(userId, guestId)
+      // Sync paywall status from server — new users get full access during beta
+      const statusRes = await fetch(`/api/paywall/status?userId=${userId}`)
+      const status = await statusRes.json()
+      if (status.isSubscribed) useSessionStore.getState().setSubscribed()
+      else if (status.isUnlocked) useSessionStore.getState().setUnlocked()
+      if (typeof status.remainingMessages === 'number') useSessionStore.getState().setRemainingMessages(status.remainingMessages)
       router.push('/onboarding')
     } catch {
       setLoading(false)

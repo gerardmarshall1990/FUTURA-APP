@@ -24,7 +24,7 @@ interface LifecycleTrigger {
 
 export default function HomePage() {
   const router = useRouter()
-  const { userId, isUnlocked, isSubscribed } = useSessionStore()
+  const { userId, isUnlocked, isSubscribed, setSubscribed, setUnlocked, setRemainingMessages } = useSessionStore()
   const { name } = useOnboardingStore()
   const [insight, setInsight] = useState<DailyInsight | null>(null)
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([])
@@ -38,6 +38,16 @@ export default function HomePage() {
     }
 
     track(userId, 'app_opened')
+
+    // Sync paywall status from server — fixes stale store after beta grant or session create
+    fetch(`/api/paywall/status?userId=${userId}`)
+      .then(r => r.json())
+      .then(status => {
+        if (status.isSubscribed) setSubscribed()
+        else if (status.isUnlocked) setUnlocked()
+        if (typeof status.remainingMessages === 'number') setRemainingMessages(status.remainingMessages)
+      })
+      .catch(() => {})
 
     async function loadDashboard() {
       try {
